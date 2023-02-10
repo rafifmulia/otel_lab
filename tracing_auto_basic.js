@@ -6,9 +6,12 @@ const { OTLPTraceExporter} = require("@opentelemetry/exporter-trace-otlp-http");
 const { diag, DiagConsoleLogger, DiagLogLevel } = require('@opentelemetry/api');
 
 // For troubleshooting, set the log level to DiagLogLevel.DEBUG
-diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
+diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.DEBUG);
 
 const sdk = new opentelemetry.NodeSDK({
+  // CARA 1 dimunculkan di console
+  // traceExporter: new opentelemetry.tracing.ConsoleSpanExporter(),
+  // CARA 2 langsung dikirim
   traceExporter: new OTLPTraceExporter({
     // optional - default url is http://localhost:4318/v1/traces
     url: "http://localhost:4318/v1/traces",

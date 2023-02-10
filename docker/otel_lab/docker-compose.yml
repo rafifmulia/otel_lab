@@ -15,6 +15,30 @@ services:
   # Telemetry Components
   # ********************
 
+  # # Jaeger
+  # jaeger:
+  #   image: jaegertracing/all-in-one
+  #   container_name: jaeger
+  #   command:
+  #     - "--memory.max-traces"
+  #     - "10000"
+  #     - "--query.base-path"
+  #     - "/jaeger/ui"
+  #     - "--prometheus.server-url"
+  #     - "http://prometheus:9090"
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 275M
+  #   restart: unless-stopped
+  #   ports:
+  #     - "16686:16686"                    # Jaeger UI
+  #     - "4317"                           # OTLP gRPC default port
+  #   environment:
+  #     - COLLECTOR_OTLP_ENABLED=true
+  #     - METRICS_STORAGE_TYPE=prometheus
+  #   logging: *logging
+
   # Grafana
   grafana:
     image: grafana/grafana:9.1.0
@@ -45,7 +69,7 @@ services:
       - "9464:9464"          # Prometheus exporter
       - "8888:8888"          # metrics endpoint
     depends_on:
-      - grafana
+      - prometheus
     logging: *logging
 
   # Prometheus
