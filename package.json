@@ -1,0 +1,26 @@
+{
+  "name": "otel",
+  "version": "1.0.0",
+  "description": "exporters logs to otel",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "otel",
+    "logs",
+    "exporters"
+  ],
+  "author": "rafifmulia",
+  "license": "ISC",
+  "dependencies": {
+    "@opentelemetry/api": "^1.4.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.36.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.35.1",
+    "@opentelemetry/resources": "^1.9.1",
+    "@opentelemetry/sdk-node": "^0.35.1",
+    "@opentelemetry/sdk-trace-base": "^1.9.1",
+    "@opentelemetry/semantic-conventions": "^1.9.1",
+    "express": "^4.18.2"
+  }
+}
