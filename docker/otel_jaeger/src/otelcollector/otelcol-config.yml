@@ -10,27 +10,20 @@ receivers:
             - "https://*"
 
 exporters:
-  # jaeger:
-  #   endpoint: "jaeger:4317"
-  #   tls:
-  #     insecure: true
+  jaeger:
+    endpoint: "jaeger:14250"
+    tls:
+      insecure: true
   logging:
-  # prometheus:
-  #   endpoint: "otelcol:9464"
-  #   resource_to_telemetry_conversion:
-  #     enabled: true
-  #   enable_open_metrics: true
 processors:
   batch:
-  # spanmetrics:
-  #   metrics_exporter: prometheus
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [logging]
+      exporters: [logging, jaeger]
     metrics:
       receivers: [otlp]
       processors: [batch]
