@@ -1,0 +1,1 @@
+https://opentelemetry.io/blog/2022/instrument-nginx/
