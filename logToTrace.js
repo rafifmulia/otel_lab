@@ -12,6 +12,7 @@ const { NodeTracerProvider } = require("@opentelemetry/sdk-trace-node");
 const { registerInstrumentations } = require("@opentelemetry/instrumentation");
 const { BasicTracerProvider, ConsoleSpanExporter, BatchSpanProcessor, SimpleSpanProcessor } = require("@opentelemetry/sdk-trace-base");
 const { JaegerExporter } = require('@opentelemetry/exporter-jaeger');
+const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
 
 // For troubleshooting, set the log level to DiagLogLevel.DEBUG
 opentelemetry.diag.setLogger(new opentelemetry.DiagConsoleLogger(), opentelemetry.DiagLogLevel.DEBUG);
@@ -54,11 +55,11 @@ const provider = new BasicTracerProvider({
 // provider.addSpanProcessor(processor);
 
 // jaeger exporter and simpleSpan processor
-const exporter = new JaegerExporter({
-  endpoint: 'http://localhost:14268/api/traces',
-});
-provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
-provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()));
+// const exporter = new JaegerExporter({
+//   endpoint: 'http://localhost:14268/api/traces',
+// });
+// provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
+// provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()));
 
 // jaeger exporter and batchSpan processor
 // const exporter = new JaegerExporter({
@@ -66,6 +67,13 @@ provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()));
 // });
 // provider.addSpanProcessor(new BatchSpanProcessor(exporter));
 // provider.addSpanProcessor(new BatchSpanProcessor(new ConsoleSpanExporter()));
+
+// otel exporter and batchSpan processor
+const exporter = new OTLPTraceExporter({
+  url: 'http://localhost:4318/v1/traces',
+})
+provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
+provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()));
 
 provider.register();
 
