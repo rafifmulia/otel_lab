@@ -1,0 +1,16 @@
+version: "3.3"
+services:
+  app:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    image: nodejs-log
+    container_name: nodejs-log
+    working_dir: /usr/src/app
+    networks:
+      - outside
+
+networks:
+  outside:
+    external:
+      name: grafana-network

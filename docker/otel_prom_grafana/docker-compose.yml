@@ -1,0 +1,67 @@
+version: '3.9'
+x-default-logging: &logging
+  driver: "json-file"
+  options:
+    max-size: "5m"
+    max-file: "2"
+
+networks:
+  default:
+    name: otel_prom_grafana
+    driver: bridge
+
+services:
+  # OpenTelemetry Collector
+  otelcol:
+    image: otel/opentelemetry-collector:0.71.0
+    container_name: otel-col
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+    restart: unless-stopped
+    command: [ "--config=/etc/otelcol-config.yml", "--config=/etc/otelcol-config-extras.yml" ]
+    volumes:
+      - ./src/otelcollector/otelcol-config.yml:/etc/otelcol-config.yml
+      - ./src/otelcollector/otelcol-config-extras.yml:/etc/otelcol-config-extras.yml
+    ports:
+      - "4317:4317"           # OTLP over gRPC receiver
+      - "4318:4318"           # OTLP over HTTP receiver
+      - "8888:8888"           # metrics endpoint
+      - "9464:9464"
+      - "55680:55680"
+      - "55681:55681"
+    depends_on:
+      - prometheus
+    logging: *logging
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:9.1.0
+    container_name: grafana
+    volumes:
+      - ./src/grafana/grafana.ini:/etc/grafana/grafana.ini
+      # - ./src/grafana/provisioning/:/etc/grafana/provisioning/
+    ports:
+      - "3000:3000"
+    logging: *logging
+
+  # Prometheus
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.34.0
+    container_name: prometheus
+    command:
+      - --web.console.templates=/etc/prometheus/consoles
+      - --web.console.libraries=/etc/prometheus/console_libraries
+      - --storage.tsdb.retention.time=24h
+      - --config.file=/etc/prometheus/prometheus-config.yaml
+      - --storage.tsdb.path=/prometheus
+      # - --web.enable-lifecycle
+      # - --web.route-prefix=/
+      # - --enable-feature=exemplar-storage
+      - --enable-feature=remote-write-receiver
+    volumes:
+      - ./src/prometheus/prometheus-config.yaml:/etc/prometheus/prometheus-config.yaml
+    ports:
+      - "9090:9090"
+    logging: *logging
