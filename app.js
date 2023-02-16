@@ -3,8 +3,13 @@ const axios = require("axios");
 
 const PORT = parseInt(process.env.PORT || "8080");
 const app = express();
+const logger = require("./logger");
+
+app.use(express.json());
 
 app.get("/", (req, res) => {
+  logger.log("debug", "Hello World");
+  logger.debug("The is the home '/' route.");
   res.send("Hello World");
 });
 
@@ -43,6 +48,8 @@ app.get("/hit_other_service", (req, res) => {
     axios.request(options).then(function (response) {
       res.status(200).end(JSON.stringify(response.data));
     }).catch(function (error) {
+      logger.error("401 unauthenticated"); //error method
+      logger.debug("The is the 401 hit request for the url https://andruxnet-random-famous-quotes.p.rapidapi.com/.");
       res.status(200).json(JSON.stringify(error.response.data));
     });
   } catch (e) {
