@@ -118,7 +118,7 @@ function initCheckLastLine(path) {
 async function readWholeFileCallngLog(path) {
   const before = process.memoryUsage().heapUsed / 1024 / 1024;
   const file = await fs.open(path);
-  const logs = [];
+  // const logs = [];
 
   const meter = meterProvider.getMeter('callng.log.2');
   const inboundCallCounter = meter.createCounter('inbound_call', {
@@ -129,7 +129,7 @@ async function readWholeFileCallngLog(path) {
   for await (const line of file.readLines()) {
     ++lineNumber;
     const cols = line.split(' ');
-    const log = {};
+    // const log = {};
 
     for (const key in cols) {
       let col = cols[key].replace(',', '');
@@ -153,7 +153,7 @@ async function readWholeFileCallngLog(path) {
         inboundCallCounter.add(1);
       }
     }
-    logs.push(log);
+    // logs.push(log);
   }
   lastLines[path] = lineNumber;
   // console.log(logs);
@@ -164,7 +164,7 @@ async function readWholeFileCallngLog(path) {
 async function readUpdatedFileCallngLog(path) {
   const before = process.memoryUsage().heapUsed / 1024 / 1024;
   const file = await fs.open(path);
-  const logs = [];
+  // const logs = [];
 
   const meter = meterProvider.getMeter('callng.log.2');
   const inboundCallCounter = meter.createCounter('inbound_call', {
@@ -178,7 +178,7 @@ async function readUpdatedFileCallngLog(path) {
     if (lastLines[path] > lineNumber) continue;
 
     const cols = line.split(' ');
-    const log = {};
+    // const log = {};
     console.log('lineNumber', lineNumber);
     for (const key in cols) {
       let col = cols[key].replace(',', '');
@@ -195,7 +195,7 @@ async function readUpdatedFileCallngLog(path) {
         val = propVal[1];
       }
       if (prop.length < 1) continue;
-      log[prop] = val;
+      // log[prop] = val;
 
       if (col.includes('inbound_call')) {
         console.log(col.includes('inbound_call'));
@@ -204,7 +204,7 @@ async function readUpdatedFileCallngLog(path) {
       }
       
     }
-    logs.push(log);
+    // logs.push(log);
   }
   if (lastLines[path] < lineNumber) lastLines[path] = lineNumber;
   console.log('end lastLines', lastLines);

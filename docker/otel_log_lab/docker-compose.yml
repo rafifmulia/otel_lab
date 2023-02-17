@@ -7,15 +7,13 @@ x-default-logging: &logging
 
 networks:
   default:
-    # name: otel_prom_grafana
-    # driver: bridge
-    name: grafana-network
-    external: true
+    name: otel_log_lab
+    driver: bridge
 
 services:
   # OpenTelemetry Collector
   otelcol:
-    image: otel/opentelemetry-collector:0.71.0
+    image: otel/opentelemetry-collector-contrib:latest
     container_name: otel-col
     deploy:
       resources:
@@ -26,13 +24,24 @@ services:
     volumes:
       - ./src/otelcollector/otelcol-config.yml:/etc/otelcol-config.yml
       - ./src/otelcollector/otelcol-config-extras.yml:/etc/otelcol-config-extras.yml
+      # extra files
+      - ../../logs/callng.log.2.big:/etc/logs/callng.log.2.big
     ports:
       - "4317:4317"           # OTLP over gRPC receiver
       - "4318:4318"           # OTLP over HTTP receiver
       - "8888:8888"           # metrics endpoint
       - "9464:9464"
-      - "55680:55680"
-      - "55681:55681"
+      # - "55680"
+      # - "55681"
+      # - "13133"
+      # - "1777"
+      # - "14268"
+      # - "55678"
+      # - "55679"
+      # - "9411"
+      # - "14250"
+      # - "6831"
+      # - "6832"
     depends_on:
       - prometheus
     logging: *logging
@@ -43,7 +52,7 @@ services:
     container_name: grafana
     volumes:
       - ./src/grafana/grafana.ini:/etc/grafana/grafana.ini
-      # - ./src/grafana/provisioning/:/etc/grafana/provisioning/
+      - ./src/grafana/provisioning/:/etc/grafana/provisioning/
     ports:
       - "3000:3000"
     logging: *logging
