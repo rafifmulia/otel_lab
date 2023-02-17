@@ -2,6 +2,7 @@
 
 const path = require('path');
 const fs = require('node:fs/promises');
+// const nReadlines = require('n-readlines');
 // const events = require('events');
 const chokidar = require('chokidar');
 
@@ -15,7 +16,7 @@ const { OTLPMetricExporter } = require('@opentelemetry/exporter-metrics-otlp-htt
 const { MeterProvider, PeriodicExportingMetricReader, ConsoleMetricExporter }  = require('@opentelemetry/sdk-metrics');
 
 // For troubleshooting, set the log level to DiagLogLevel.DEBUG
-opentelemetry.diag.setLogger(new opentelemetry.DiagConsoleLogger(), opentelemetry.DiagLogLevel.DEBUG);
+// opentelemetry.diag.setLogger(new opentelemetry.DiagConsoleLogger(), opentelemetry.DiagLogLevel.DEBUG);
 
 // Optionally register instrumentation libraries if using autoInstrumentation
 registerInstrumentations({
@@ -48,7 +49,7 @@ const exporter = new OTLPMetricExporter({
 });
 meterProvider.addMetricReader(new PeriodicExportingMetricReader({
   exporter: exporter,
-  exportIntervalMillis: 30000,
+  exportIntervalMillis: 5000,
 }));
 // meterProvider.addMetricReader(exporter);
 
@@ -70,6 +71,8 @@ watcher
 
 function fileAdded(path) {
   console.log('File', path, 'has been added');
+  initCheckLastLine(path);
+
   const split = path.split('/');
   const filename = split[split.length-1];
   if (filename === 'callng.log.2') {
@@ -78,6 +81,8 @@ function fileAdded(path) {
 }
 function fileChanged(path) {
   console.log('File', path, 'has been changed');
+  initCheckLastLine(path);
+
   const split = path.split('/');
   const filename = split[split.length-1];
   if (filename === 'callng.log.2') {
@@ -86,6 +91,13 @@ function fileChanged(path) {
 }
 function fileRemoved(path) {
   console.log('File', path, 'has been removed');
+  initCheckLastLine(path);
+
+  const split = path.split('/');
+  const filename = split[split.length-1];
+  if (filename === 'callng.log.2') {
+    RemovedFileCallngLog(path);
+  }
 }
 function fileError(error) {
   console.error('Error happened', error);
@@ -95,9 +107,17 @@ console.log('Watching folder logs');
 
 
 
+const lastLines = [];
+function initCheckLastLine(path) {
+  if (typeof lastLines[path] === undefined) lastLines[path] = 0;
+}
+
+
+
+
 async function readWholeFileCallngLog(path) {
+  const before = process.memoryUsage().heapUsed / 1024 / 1024;
   const file = await fs.open(path);
-  let incr = 1;
   const logs = [];
 
   const meter = meterProvider.getMeter('callng.log.2');
@@ -105,7 +125,9 @@ async function readWholeFileCallngLog(path) {
     description: 'Counter of Inbound Call',
   });
 
+  let lineNumber = 0;
   for await (const line of file.readLines()) {
+    ++lineNumber;
     const cols = line.split(' ');
     const log = {};
 
@@ -132,25 +154,32 @@ async function readWholeFileCallngLog(path) {
       }
     }
     logs.push(log);
-    incr++;
   }
+  lastLines[path] = lineNumber;
   // console.log(logs);
+  const used = (process.memoryUsage().heapUsed / 1024 / 1024) - before;
+  console.log(`The script uses approximately ${Math.round(used * 100) / 100} MB`);
 }
 
 async function readUpdatedFileCallngLog(path) {
+  const before = process.memoryUsage().heapUsed / 1024 / 1024;
   const file = await fs.open(path);
-  let incr = 1;
   const logs = [];
 
-  // const meter = meterProvider.getMeter('callng.log.2');
-  // const inboundCallCounter = meter.createCounter('inbound_call', {
-  //   description: 'Counter of Inbound Call',
-  // });
+  const meter = meterProvider.getMeter('callng.log.2');
+  const inboundCallCounter = meter.createCounter('inbound_call', {
+    description: 'Counter of Inbound Call',
+  });
 
+  let lineNumber = 0;
+  console.log('start lastLines', lastLines);
   for await (const line of file.readLines()) {
+    ++lineNumber;
+    if (lastLines[path] > lineNumber) continue;
+
     const cols = line.split(' ');
     const log = {};
-
+    console.log('lineNumber', lineNumber);
     for (const key in cols) {
       let col = cols[key].replace(',', '');
       let propVal = col.split('=');
@@ -168,15 +197,24 @@ async function readUpdatedFileCallngLog(path) {
       if (prop.length < 1) continue;
       log[prop] = val;
 
-      // if (col.includes('inbound_call')) {
-      //   console.log('UPDATE: inboundCallCounter.add(1);');
-      //   inboundCallCounter.add(1);
-      // }
+      if (col.includes('inbound_call')) {
+        console.log(col.includes('inbound_call'));
+        console.log('UPDATE: inboundCallCounter.add(1);');
+        inboundCallCounter.add(1);
+      }
+      
     }
     logs.push(log);
-    incr++;
   }
-  console.log(logs);
+  if (lastLines[path] < lineNumber) lastLines[path] = lineNumber;
+  console.log('end lastLines', lastLines);
+  // console.log(logs);
+  const used = (process.memoryUsage().heapUsed / 1024 / 1024) - before;
+  console.log(`The script uses approximately ${Math.round(used * 100) / 100} MB`);
+}
+
+async function RemovedFileCallngLog(path) {
+  lastLines[path] = 0;
 }
 
 
