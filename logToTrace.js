@@ -115,6 +115,7 @@ provider.register();
         prop = propVal[0];
         val = propVal[1];
       }
+      if (prop.length < 1) continue;
       // SemanticResourceAttributes.
       childSpan.setAttribute(prop, val);
       log[prop] = val;

@@ -7,8 +7,10 @@ x-default-logging: &logging
 
 networks:
   default:
-    name: otel_prom_grafana
-    driver: bridge
+    # name: otel_prom_grafana
+    # driver: bridge
+    name: grafana-network
+    external: true
 
 services:
   # OpenTelemetry Collector
