@@ -56,9 +56,9 @@ services:
       - --storage.tsdb.retention.time=24h
       - --config.file=/etc/prometheus/prometheus-config.yaml
       - --storage.tsdb.path=/prometheus
-      # - --web.enable-lifecycle
-      # - --web.route-prefix=/
-      # - --enable-feature=exemplar-storage
+      - --web.enable-lifecycle
+      - --web.route-prefix=/
+      - --enable-feature=exemplar-storage
       - --enable-feature=remote-write-receiver
     volumes:
       - ./src/prometheus/prometheus-config.yaml:/etc/prometheus/prometheus-config.yaml

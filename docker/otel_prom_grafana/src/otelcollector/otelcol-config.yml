@@ -14,6 +14,10 @@ exporters:
   prometheusremotewrite:
     # endpoint: http://admin:admin@prometheus:9090/api/v1/write
     endpoint: http://prometheus:9090/api/v1/write
+  prometheus:
+    endpoint: 0.0.0.0:9090
+    resource_to_telemetry_conversion:
+      enabled: true
 
 processors:
   batch:

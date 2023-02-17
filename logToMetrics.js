@@ -124,11 +124,11 @@ let itr = setInterval(() => {
   requestCounter.add(1, attributes);
   upDownCounter.add(Math.random() > 0.5 ? 1 : -1, attributes);
   histogram.record(Math.random(), attributes);
-  counter.add(10, { 'key': 'value' });
+  counter.add(10, { 'key1': 'value1' });
 }, 1000);
 setTimeout(() => {
   clearInterval(itr);
-}, 5000);
+}, 5010);
 
 
 
