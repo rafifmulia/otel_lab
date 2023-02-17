@@ -87,25 +87,7 @@ counter.add(10, { pid: process.pid });
       // SemanticResourceAttributes.
       childSpan.setAttribute(prop, val);
       log[prop] = val;
-    }for (const key in cols) {
-      let col = cols[key].replace(',', '');
-      let propVal = col.split('=');
-      let prop, val = '';
-      if (key === 0) {
-        prop = 'date';
-        val = propVal[0];
-      } else if (key === 1) {
-        prop = 'host';
-        val = propVal[0];
-      } else {
-        prop = propVal[0];
-        val = propVal[1];
-      }
-      // SemanticResourceAttributes.
-      childSpan.setAttribute(prop, val);
-      log[prop] = val;
     }
-
     childSpan.addEvent('log-getlog', log);
     childSpan.end();
     counter.add(1, { pid: process.pid });
