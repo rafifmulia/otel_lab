@@ -9,13 +9,13 @@ networks:
   default:
     # name: otel_prom_grafana
     # driver: bridge
-    name: grafana-network
-    external: true
+    # name: grafana-network
+    # external: true
 
 services:
   # OpenTelemetry Collector
   otelcol:
-    image: otel/opentelemetry-collector:0.71.0
+    image: otel/opentelemetry-collector-contrib:latest
     container_name: otel-col
     deploy:
       resources:
