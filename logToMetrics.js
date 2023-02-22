@@ -15,6 +15,21 @@ const { registerInstrumentations } = require("@opentelemetry/instrumentation");
 const { OTLPMetricExporter } = require('@opentelemetry/exporter-metrics-otlp-http');
 const { MeterProvider, PeriodicExportingMetricReader, ConsoleMetricExporter }  = require('@opentelemetry/sdk-metrics');
 
+
+// ENUMERATIONS / CONST
+const WINDOWS_PATH = '\\';
+const UNIX_PATH = '/';
+
+
+function timeoutPromise(cb, timeoutInMs) {
+  return new Promise(async (resolve, reject) => {
+    setTimeout(() => {
+      resolve(cb());
+    }, timeoutInMs);
+  });
+}
+
+
 // For troubleshooting, set the log level to DiagLogLevel.DEBUG
 // opentelemetry.diag.setLogger(new opentelemetry.DiagConsoleLogger(), opentelemetry.DiagLogLevel.DEBUG);
 
@@ -47,7 +62,7 @@ const exporter = new OTLPMetricExporter({
 
 meterProvider.addMetricReader(new PeriodicExportingMetricReader({
   exporter: exporter,
-  exportIntervalMillis: 5000,
+  exportIntervalMillis: 1000,
 }));
 // });
 const pathLog = path.resolve('logs');
@@ -63,11 +78,11 @@ function fileAdded(path) {
   console.log('File', path, 'has been added');
   initCheckLastLine(path);
 
-  const split = path.split('\\');
+  const split = path.split(UNIX_PATH);
   const filename = split[split.length-1];
   console.log(filename);
 
-  if (filename === 'callng.log.2') {
+  if (filename === 'callng.log.2.big') {
     readWholeFileCallngLog(path);
   }
 }
@@ -75,9 +90,9 @@ function fileChanged(path) {
   console.log('File', path, 'has been changed');
   initCheckLastLine(path);
 
-  const split = path.split('\\');
+  const split = path.split(UNIX_PATH);
   const filename = split[split.length-1];
-  if (filename === 'callng.log.2') {
+  if (filename === 'callng.log.2.big') {
     readUpdatedFileCallngLog(path);
   }
 }
@@ -85,9 +100,9 @@ function fileRemoved(path) {
   console.log('File', path, 'has been removed');
   initCheckLastLine(path);
 
-  const split = path.split('\\');
+  const split = path.split(UNIX_PATH);
   const filename = split[split.length-1];
-  if (filename === 'callng.log.2') {
+  if (filename === 'callng.log.2.big') {
     RemovedFileCallngLog(path);
   }
 }
@@ -123,20 +138,25 @@ async function readWholeFileCallngLog(path) {
   // console.log(match);
 
   let lineNumber = 0;
+  let lastDate = '';
   for await (const line of file.readLines()) {
     ++lineNumber;
     const cols = line.split(' ');
     // const log = {};
+    // console.log(cols[0]);
     for (const key in cols) {
       let col = cols[key].replace(',', '');
-      
       if (col.includes('inbound_call')) {
-        console.log('ADD: inboundCallCounter.add(1);');        
-        inboundCallCounter.add(1);
+        await timeoutPromise(() => {
+          console.log('ADD: inboundCallCounter.add(1);');
+          inboundCallCounter.add(1);
+        }, 1000);
       } else if (col.includes('SUCCESS')) {
+        await timeoutPromise(() => {
           console.log('ADD: successCounter.add(1);');
           successCounter.add(1);
-        }
+        }, 1000);
+      }
     }
     
     // logs.push(log);
@@ -152,7 +172,7 @@ async function readUpdatedFileCallngLog(path) {
   const file = await fs.open(path);
   // const logs = [];
 
-  const meter = meterProvider.getMeter('callng.log.2');
+  const meter = meterProvider.getMeter('callng.log.2.big');
   const inboundCallCounter = meter.createCounter('inbound_call', {
     description: 'Counter of Inbound Call',
   });
@@ -188,12 +208,16 @@ async function readUpdatedFileCallngLog(path) {
       // log[prop] = val;
 
       if (col.includes('inbound_call')) {
-        console.log('UPDATE: inboundCallCounter.add(1);');
-        inboundCallCounter.add(1);
+        await timeoutPromise(() => {
+          console.log('UPDATE: inboundCallCounter.add(1);');
+          inboundCallCounter.add(1);
+        }, 1000);
       } else if (col.includes('SUCCESS')) {
-          console.log('ADD: successCounter.add(1);');
+        await timeoutPromise(() => {
+          console.log('UPDATE: successCounter.add(1);');
           successCounter.add(1);
-        }
+        }, 1000);
+      }
        
     }
     // logs.push(log);

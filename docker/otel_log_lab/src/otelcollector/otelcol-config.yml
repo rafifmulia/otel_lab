@@ -66,19 +66,27 @@ processors:
       - context: resource
         statements:
           - keep_keys(attributes, ["action", "intconname", "cidnumber", "cidname", "dstnumber"])
+      - context: scope
+        statements:
+          - keep_keys(attributes, ["action", "intconname", "cidnumber", "cidname", "dstnumber"])
+          # - keep_keys(resource.attributes, ["action", "intconname", "cidnumber", "cidname", "dstnumber"])
+          - set(name, "scope_intconname")
+          - set(version, "0.1.0")
       - context: metric
         statements:
           - keep_keys(resource.attributes, ["action", "intconname", "cidnumber", "cidname", "dstnumber"])
-          # - set(resource.attributes["intconname"], "TT")
-          - set(name, "intconname")
+          - set(name, "metric_intconname")
           - set(description, resource.attributes["intconname"])
+          - set(unit, "unit_intconname")
           - set(type, METRIC_DATA_TYPE_SUM)
+          - set(aggregation_temporality, AGGREGATION_TEMPORALITY_CUMULATIVE)
           - set(is_monotonic, true)
-      # - context: datapoint
-      #   statements:
-      #     # - convert_sum_to_gauge() where metric.name == "system.processes.count"
-      #     # - convert_gauge_to_sum("cumulative", false) where metric.name == "prometheus_metric"
-      #     - set(sum, 1)
+          # - set(data_points, datapoints.SummaryDataPointSlice)
+      - context: datapoint
+        statements:
+          - set(flags, FLAG_NONE)
+          # - set(sum, 1)
+          # - set(count, 1)
   attributes:
     actions:
     - action: insert
@@ -147,11 +155,11 @@ service:
       receivers: [otlp]
       processors: [batch]
       exporters: [logging, prometheusremotewrite]
-    # logs:
-    #   receivers: [otlp]
-    #   processors: [batch, transform]
-    #   exporters: [logging]
     logs:
       receivers: [otlp, filelog]
-      processors: [resource, attribute]
+      processors: [batch, transform]
       exporters: [logging, loki]
+    # logs:
+    #   receivers: [otlp, filelog]
+    #   processors: [resource, attribute]
+    #   exporters: [logging, loki]

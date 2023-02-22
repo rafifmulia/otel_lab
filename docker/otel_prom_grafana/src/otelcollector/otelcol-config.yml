@@ -22,12 +22,12 @@ exporters:
       enabled: true
 
   influxdb:
-    endpoint: http://localhost:8086
-    timeout: 500ms
+    endpoint: http://influxdb:8086/api/v2/write
+    timeout: 1s
     org: shibly
     bucket: test
-    token: OL3ddWoK1QESkRi-Hamycwc8JL8oj3gihVOr1blyOi2_wzhoAHnjmOPoYA__zrVJalz3_rorRRP_lnCGPMMENw==
-    metrics_schema: telegraf-prometheus-v2
+    token: "M0UrSZJtyOTi04FinpOw4lv6wrvzg5dTZ88VM9Zkbh2XpmFOYYrof9NxdoR_jY2afRiwJNJ92V-TlGVugUzWQA=="
+    metrics_schema: telegraf-prometheus-v1
 
     sending_queue:
       enabled: true
