@@ -23,9 +23,6 @@ registerInstrumentations({
   instrumentations: [],
 });
 
-
-
-
 /**
  * Set provider and resource name
  */
@@ -45,20 +42,13 @@ const meterProvider = new MeterProvider({
  * Set the right exporter and processor
  */
 const exporter = new OTLPMetricExporter({
-  url: 'http://otel-col:4318/v1/metrics',
+  url: 'http://localhost:4318/v1/metrics',
 });
+
 meterProvider.addMetricReader(new PeriodicExportingMetricReader({
   exporter: exporter,
   exportIntervalMillis: 5000,
 }));
-// meterProvider.addMetricReader(exporter);
-
-
-
-
-// const evLogFile = new events.EventEmitter();
-// evLogFile.on('updated', function(data) {
-//   console.log(data);
 // });
 const pathLog = path.resolve('logs');
 const watcher = chokidar.watch(pathLog, {ignored: /^\./, persistent: true});
@@ -73,8 +63,10 @@ function fileAdded(path) {
   console.log('File', path, 'has been added');
   initCheckLastLine(path);
 
-  const split = path.split('/');
+  const split = path.split('\\');
   const filename = split[split.length-1];
+  console.log(filename);
+
   if (filename === 'callng.log.2') {
     readWholeFileCallngLog(path);
   }
@@ -83,7 +75,7 @@ function fileChanged(path) {
   console.log('File', path, 'has been changed');
   initCheckLastLine(path);
 
-  const split = path.split('/');
+  const split = path.split('\\');
   const filename = split[split.length-1];
   if (filename === 'callng.log.2') {
     readUpdatedFileCallngLog(path);
@@ -93,7 +85,7 @@ function fileRemoved(path) {
   console.log('File', path, 'has been removed');
   initCheckLastLine(path);
 
-  const split = path.split('/');
+  const split = path.split('\\');
   const filename = split[split.length-1];
   if (filename === 'callng.log.2') {
     RemovedFileCallngLog(path);
@@ -104,55 +96,49 @@ function fileError(error) {
 }
 console.log('Watching folder logs');
 
-
-
-
 const lastLines = [];
 function initCheckLastLine(path) {
   if (typeof lastLines[path] === undefined) lastLines[path] = 0;
 }
 
-
-
-
 async function readWholeFileCallngLog(path) {
   const before = process.memoryUsage().heapUsed / 1024 / 1024;
   const file = await fs.open(path);
+  // const logLineRegex = /(?<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}\+\d{2}:\d{2}) (?<host>\S+) program=(?<program>\S+), pid=(?<pid>\d+), module=(?<module>\S+), space=(?<space>\S+), action=(?<action>\S+), seshid=(?<seshid>\S+), uuid=(?<uuid>\S+), route=(?<route>\S+), sipprofile=(?<sipprofile>\S+), gateway=(?<gateway>\S+), algorithm=(?<algorithm>\S+), forceroute=(?<forceroute>\S+)/;
   // const logs = [];
 
-  const meter = meterProvider.getMeter('callng.log.2');
+  const meter = meterProvider.getMeter('counter_metrics');
+  
   const inboundCallCounter = meter.createCounter('inbound_call', {
-    description: 'Counter of Inbound Call',
+    description: 'Counter of success type',
   });
+
+  const successCounter = meter.createCounter('success_type', {
+    description: 'Counter of success type',
+  });
+
+
+  // const match = logLineRegex.exec(file);
+  // const fields = match?.groups ?? {};
+  // console.log(match);
 
   let lineNumber = 0;
   for await (const line of file.readLines()) {
     ++lineNumber;
     const cols = line.split(' ');
     // const log = {};
-
     for (const key in cols) {
       let col = cols[key].replace(',', '');
-      // let propVal = col.split('=');
-      // let prop, val = '';
-      // if (key === '0') {
-      //   prop = 'date';
-      //   val = propVal[0];
-      // } else if (key === '1') {
-      //   prop = 'host';
-      //   val = propVal[0];
-      // } else {
-      //   prop = propVal[0];
-      //   val = propVal[1];
-      // }
-      // if (prop.length < 1) continue;
-      // log[prop] = val;
-
+      
       if (col.includes('inbound_call')) {
-        console.log('ADD: inboundCallCounter.add(1);');
+        console.log('ADD: inboundCallCounter.add(1);');        
         inboundCallCounter.add(1);
-      }
+      } else if (col.includes('SUCCESS')) {
+          console.log('ADD: successCounter.add(1);');
+          successCounter.add(1);
+        }
     }
+    
     // logs.push(log);
   }
   lastLines[path] = lineNumber;
@@ -169,6 +155,10 @@ async function readUpdatedFileCallngLog(path) {
   const meter = meterProvider.getMeter('callng.log.2');
   const inboundCallCounter = meter.createCounter('inbound_call', {
     description: 'Counter of Inbound Call',
+  });
+
+  const successCounter = meter.createCounter('success_type', {
+    description: 'Counter of success type',
   });
 
   let lineNumber = 0;
@@ -188,21 +178,23 @@ async function readUpdatedFileCallngLog(path) {
         prop = 'date';
         val = propVal[0];
       } else if (key === '1') {
-        prop = 'host';
-        val = propVal[0];
-      } else {
-        prop = propVal[0];
-        val = propVal[1];
-      }
+          prop = 'host';
+          val = propVal[0];
+        }   else {
+            prop = propVal[0];
+            val = propVal[1];
+          }
       if (prop.length < 1) continue;
       // log[prop] = val;
 
       if (col.includes('inbound_call')) {
-        console.log(col.includes('inbound_call'));
         console.log('UPDATE: inboundCallCounter.add(1);');
         inboundCallCounter.add(1);
-      }
-      
+      } else if (col.includes('SUCCESS')) {
+          console.log('ADD: successCounter.add(1);');
+          successCounter.add(1);
+        }
+       
     }
     // logs.push(log);
   }
@@ -216,10 +208,7 @@ async function readUpdatedFileCallngLog(path) {
 async function RemovedFileCallngLog(path) {
   lastLines[path] = 0;
 }
-
-
-
-
+  
 /**
  * Example metrics
  */

@@ -33,20 +33,23 @@ services:
       - "9464:9464"
       - "55680:55680"
       - "55681:55681"
+    environment:
+      - OTEL_EXPORTER_INFLUXDB_ENDPOINT=http://influxdb:8086
     depends_on:
       - prometheus
+      - influxdb
     logging: *logging
 
   # Grafana
-  grafana:
-    image: grafana/grafana:9.1.0
-    container_name: grafana
-    volumes:
-      - ./src/grafana/grafana.ini:/etc/grafana/grafana.ini
-      # - ./src/grafana/provisioning/:/etc/grafana/provisioning/
-    ports:
-      - "3000:3000"
-    logging: *logging
+  # grafana:
+  #   image: grafana/grafana:9.1.0
+  #   container_name: grafana
+  #   volumes:
+  #     - ./src/grafana/grafana.ini:/etc/grafana/grafana.ini
+  #     # - ./src/grafana/provisioning/:/etc/grafana/provisioning/
+  #   ports:
+  #     - "3000:3000"
+  #   logging: *logging
 
   # Prometheus
   prometheus:
@@ -67,3 +70,27 @@ services:
     ports:
       - "9090:9090"
     logging: *logging
+  
+  influxdb:
+    image: influxdb:latest
+    ports:
+      - "8086:8086"
+    environment:
+      - INFLUXDB_DB=testDB
+      - INFLUXDB_ADMIN_USER=admin
+      - INFLUXDB_ADMIN_PASSWORD=admin
+      - INFLUXDB_HTTP_AUTH_ENABLED=true
+      - INFLUXDB_HTTP_FLUX_ENABLED=true
+    volumes:
+      - influxdb-data:/var/lib/influxdb
+  
+volumes:
+  influxdb-data:
+
+  # telegraf:
+  #   image: telegraf:latest
+  #   container_name: telegraf
+  #   links:
+  #     - influxdb
+  #   volumes:
+  #     - ./telegraf.conf:/etc/telegraf/telegraf.conf:ro

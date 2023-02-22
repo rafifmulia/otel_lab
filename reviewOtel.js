@@ -54,7 +54,7 @@ const exporter = new OTLPMetricExporter({
   
     const split = path.split('/');
     const filename = split[split.length-1];
-    if (filename === 'callng.log.2') {
+    if (filename === 'callng.log.2.inbound_call') {
       readWholeFileCallngLog(path);
     }
   }
@@ -64,7 +64,7 @@ const exporter = new OTLPMetricExporter({
   
     const split = path.split('/');
     const filename = split[split.length-1];
-    if (filename === 'callng.log.2') {
+    if (filename === 'callng.log.2.inbound_call') {
       readUpdatedFileCallngLog(path);
     }
   }
@@ -74,7 +74,7 @@ const exporter = new OTLPMetricExporter({
   
     const split = path.split('/');
     const filename = split[split.length-1];
-    if (filename === 'callng.log.2') {
+    if (filename === 'callng.log.2.inbound_call') {
       RemovedFileCallngLog(path);
     }
   }
@@ -95,7 +95,7 @@ const exporter = new OTLPMetricExporter({
     const file = await fs.open(path);
     // const logs = [];
   
-    const meter = meterProvider.getMeter('callng.log.2');
+    const meter = meterProvider.getMeter('callng.log.2.inbound_call');
     const inboundCallCounter = meter.createCounter('inbound_call', {
       description: 'Counter of Inbound Call',
     });
@@ -125,7 +125,7 @@ const exporter = new OTLPMetricExporter({
     const file = await fs.open(path);
     // const logs = [];
   
-    const meter = meterProvider.getMeter('callng.log.2');
+    const meter = meterProvider.getMeter('callng.log.2.inbound_call');
     const inboundCallCounter = meter.createCounter('inbound_call', {
       description: 'Counter of Inbound Call',
     });
