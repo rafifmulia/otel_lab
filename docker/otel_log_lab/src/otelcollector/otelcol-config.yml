@@ -12,9 +12,43 @@ receivers:
   # file/1:
   #   path: /etc/logs/callng.log.2.big
   filelog:
+    include: [/etc/logs/callng.log.2.small]
+    encoding: utf-8
+    max_log_size: 1MiB
+    start_at: beginning
+    poll_interval: 1000000
+    operators:
+      - type: regex_parser
+        id: action
+        # regex: '^action=(?P<action>[^,]+), call_id=(?P<call_id>.*)$'
+        # regex: 'r"(?P<key>\w+)=(?P<value>[^,]+)"'
+        regex: 'action=(?P<action>[^,]+)'
+        if: 'body contains "action="'
+      - type: regex_parser
+        id: intconname
+        regex: 'intconname=(?P<intconname>[^,]+)'
+        if: 'body contains "intconname="'
+      - type: regex_parser
+        id: cidnumber
+        regex: 'cidnumber=(?P<cidnumber>[^,]+)'
+        if: 'body contains "cidnumber="'
+        # if: 'body in ["cidnumber"]'
+      - type: regex_parser
+        id: cidname
+        regex: 'cidname=(?P<cidname>[^,]+)'
+        if: 'body contains "cidname="'
+      - type: regex_parser
+        id: dstnumber
+        regex: 'dstnumber=(?P<dstnumber>[^,]+)'
+        if: 'body contains "dstnumber="'
+      # - type: stdout
+      # - type: file_output
+      #   path: /etc/logs/callng.log.2.formatted.small
+      #   # format: "Time: {{.Timestamp}} Body: {{.Body}}\n"
 
 exporters:
   logging:
+    verbosity: detailed
   prometheusremotewrite:
     # endpoint: http://admin:admin@prometheus:9090/api/v1/write
     endpoint: http://prometheus:9090/api/v1/write
@@ -22,11 +56,88 @@ exporters:
     endpoint: 0.0.0.0:9090
     resource_to_telemetry_conversion:
       enabled: true
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
 
 processors:
   batch:
+  transform:
+    metric_statements:
+      - context: resource
+        statements:
+          - keep_keys(attributes, ["action", "intconname", "cidnumber", "cidname", "dstnumber"])
+      - context: metric
+        statements:
+          - keep_keys(resource.attributes, ["action", "intconname", "cidnumber", "cidname", "dstnumber"])
+          # - set(resource.attributes["intconname"], "TT")
+          - set(name, "intconname")
+          - set(description, resource.attributes["intconname"])
+          - set(type, METRIC_DATA_TYPE_SUM)
+          - set(is_monotonic, true)
+      # - context: datapoint
+      #   statements:
+      #     # - convert_sum_to_gauge() where metric.name == "system.processes.count"
+      #     # - convert_gauge_to_sum("cumulative", false) where metric.name == "prometheus_metric"
+      #     - set(sum, 1)
+  attributes:
+    actions:
+    - action: insert
+      key: event_domain
+      from_attribute: event.domain
+    - action: insert
+      key: loki.attribute.labels
+      value: event_domain
+  resource:
+    attributes:
+    - action: insert
+      key: service_name
+      from_attribute: service.name
+    - action: insert
+      key: service_namespace
+      from_attribute: service.namespace
+    - action: insert
+      key: loki.resource.labels
+      value: service_name, service_namespace
+  # Under development
+  # logstransform:
+  #   operators:
+  #     - type: regex_parser
+  #       id: action
+  #       # regex: '^action=(?P<action>[^,]+), call_id=(?P<call_id>.*)$'
+  #       # regex: 'r"(?P<key>\w+)=(?P<value>[^,]+)"'
+  #       regex: 'action=(?P<action>[^,]+)'
+  #       if: 'body contains "action="'
+  #     - type: regex_parser
+  #       id: intconname
+  #       regex: 'intconname=(?P<intconname>[^,]+)'
+  #       if: 'body contains "intconname="'
+  #     - type: regex_parser
+  #       id: cidnumber
+  #       regex: 'cidnumber=(?P<cidnumber>[^,]+)'
+  #       if: 'body contains "cidnumber="'
+  #       # if: 'body in ["cidnumber"]'
+  #     - type: regex_parser
+  #       id: cidname
+  #       regex: 'cidname=(?P<cidname>[^,]+)'
+  #       if: 'body contains "cidname="'
+  #     - type: regex_parser
+  #       id: dstnumber
+  #       regex: 'dstnumber=(?P<dstnumber>[^,]+)'
+  #       if: 'body contains "dstnumber="'
+  #   transform:
+  #     metric_statements:
+  #       - context: resource
+  #         statements:
+  #           - keep_keys(attributes, ["action"])
+  #           - keep_keys(attributes, ["intconname"])
+  #           - keep_keys(attributes, ["cidnumber"])
+  #           - keep_keys(attributes, ["cidname"])
+  #           - keep_keys(attributes, ["dstnumber"])
 
 service:
+  telemetry:
+    logs:
+      level: "debug"
   pipelines:
     traces:
       receivers: [otlp]
@@ -36,7 +147,11 @@ service:
       receivers: [otlp]
       processors: [batch]
       exporters: [logging, prometheusremotewrite]
+    # logs:
+    #   receivers: [otlp]
+    #   processors: [batch, transform]
+    #   exporters: [logging]
     logs:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [logging]
+      receivers: [otlp, filelog]
+      processors: [resource, attribute]
+      exporters: [logging, loki]

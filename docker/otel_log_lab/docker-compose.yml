@@ -19,13 +19,17 @@ services:
       resources:
         limits:
           memory: 100M
+          cpus: '0.2'
     restart: unless-stopped
-    command: [ "--config=/etc/otelcol-config.yml", "--config=/etc/otelcol-config-extras.yml" ]
+    command: [
+      "--config=/etc/otelcol-config.yml",
+      "--config=/etc/otelcol-config-extras.yml"
+    ]
     volumes:
       - ./src/otelcollector/otelcol-config.yml:/etc/otelcol-config.yml
       - ./src/otelcollector/otelcol-config-extras.yml:/etc/otelcol-config-extras.yml
       # extra files
-      - ../../logs/callng.log.2.big:/etc/logs/callng.log.2.big
+      - ../../logs/:/etc/logs/
     ports:
       - "4317:4317"           # OTLP over gRPC receiver
       - "4318:4318"           # OTLP over HTTP receiver
@@ -50,9 +54,15 @@ services:
   grafana:
     image: grafana/grafana:9.1.0
     container_name: grafana
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+          cpus: '0.2'
     volumes:
       - ./src/grafana/grafana.ini:/etc/grafana/grafana.ini
       - ./src/grafana/provisioning/:/etc/grafana/provisioning/
+      - ./src/grafana/var/lib/grafana:/var/lib/grafana
     ports:
       - "3000:3000"
     logging: *logging
@@ -61,6 +71,11 @@ services:
   prometheus:
     image: quay.io/prometheus/prometheus:v2.34.0
     container_name: prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+          cpus: '0.2'
     command:
       - --web.console.templates=/etc/prometheus/consoles
       - --web.console.libraries=/etc/prometheus/console_libraries
@@ -75,4 +90,45 @@ services:
       - ./src/prometheus/prometheus-config.yaml:/etc/prometheus/prometheus-config.yaml
     ports:
       - "9090:9090"
+    logging: *logging
+
+  # Loki
+  loki:
+    image: grafana/loki:2.7.3
+    container_name: loki
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+          cpus: '0.2'
+    command:
+      - -config.file=/etc/loki/local-docker-config.yaml
+    volumes:
+      - ./src/loki/local-config.yaml:/etc/loki/local-config.yaml
+      - ./src/loki/local-docker-config.yaml:/etc/loki/local-docker-config.yaml
+      - ./src/loki/data/loki:/data/loki
+    ports:
+      - "3100:3100"
+    logging: *logging
+
+  # Promtail
+  promtail:
+    image: grafana/promtail:2.7.3
+    container_name: promtail
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+          cpus: '0.2'
+    command:
+      - -config.file=/etc/promtail/local-docker-config.yaml
+    volumes:
+      - ./src/promtail/local-config.yaml:/etc/promtail/local-config.yaml
+      - ./src/promtail/local-docker-config.yaml:/etc/promtail/local-docker-config.yaml
+      # supaya di localhost:9100/targets jalan harus ada file lognya / yang active
+      - ../../logs/:/var/log/
+    ports:
+      - "9080:9080"
+    depends_on:
+      - loki
     logging: *logging
