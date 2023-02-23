@@ -5,6 +5,7 @@ const fs = require('node:fs/promises');
 // const nReadlines = require('n-readlines');
 // const events = require('events');
 const chokidar = require('chokidar');
+// chokidar issue: https://stackoverflow.com/questions/70615579/stop-nodejs-from-garbage-collection-automatic-closing-of-file-descriptors
 const moment = require('moment');
 
 // const opentelemetry = require("@opentelemetry/sdk-node");
@@ -40,6 +41,7 @@ async function forceFlushMetricWithDelay(funcCountMetric, meterProvider, delayIn
 }
 
 
+
 /**
  * Config OpenTelemetry
  */
@@ -52,7 +54,7 @@ registerInstrumentations({
 });
 
 /**
- * Set provider and resource name
+ * Set provider and resource
  */
 const resource = Resource.default().merge(
   new Resource({
@@ -68,7 +70,7 @@ const meterProvider = new MeterProvider({
 
 
 /**
- * Set the right exporter and processor
+ * Set the right exporter and processor(tracing) / reader(metrics)
  */
 const metricOtelExporter = new OTLPMetricExporter({
   url: 'http://localhost:4318/v1/metrics',
@@ -144,73 +146,32 @@ function initCheckLastLine(path) {
 async function readWholeFileCallngLog(path) {
   const before = process.memoryUsage().heapUsed / 1024 / 1024;
   const file = await fs.open(path);
+  
+  const meter = meterProvider.getMeter('callng');
+
   // const logLineRegex = /(?<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}\+\d{2}:\d{2}) (?<host>\S+) program=(?<program>\S+), pid=(?<pid>\d+), module=(?<module>\S+), space=(?<space>\S+), action=(?<action>\S+), seshid=(?<seshid>\S+), uuid=(?<uuid>\S+), route=(?<route>\S+), sipprofile=(?<sipprofile>\S+), gateway=(?<gateway>\S+), algorithm=(?<algorithm>\S+), forceroute=(?<forceroute>\S+)/;
   // const logs = [];
-
-  const meter = meterProvider.getMeter('callng');
-  
-  const mInboundCallSc = meter.createUpDownCounter('sbc_inbound_success', {
-    description: 'inbound call success',
-    unit: 'tps', // time per second
-  });
-
 
   // const match = logLineRegex.exec(file);
   // const fields = match?.groups ?? {};
   // console.log(match);
 
   let lineNumber = 0;
-  // // used per different session
-  // const tmpSessData = {
-  //   seshid: '',
-  //   inbound_sc: 0,
-  //   date: '',
-  // };
-  // // used per different time
-  // const tmpCounterData = {
-  //   inbound_sc: 0,
-  // };
+
+  /**
+   * Logic untuk kalkulasi inbound success dengan UpDownCounter
+   */
+
+  const mInboundCallSc = meter.createUpDownCounter('sbc_inbound_success', {
+    description: 'inbound call success',
+    unit: 'tps', // time per second
+  });
+
   // used per different inbound success
   const tmpSbcInboundSc = {
     lastUnixSecond: '', // nilai terkecilnya second bukan milisecond atau dibawahnya
     cntInboundSc: 0,
   };
-
-  // for await (const line of file.readLines()) {
-  //   ++lineNumber;
-  //   const cols = line.split(' '); // per section
-
-  //   for (const key in cols) {
-  //     if (cols[key].length < 1) continue; // skip yang kosong
-  //     const col = cols[key].replace(',', ''); // deny character
-  //     const keyVal = col.split('='); // pembagian key value
-
-  //     if (keyVal[0].includes('seshid')) {
-  //       // jika session id tidak sama, artinya call baru
-  //       if (tmpSessData.seshid !== keyVal[1]) {
-  //         // push old session data
-  //         if (tmpSessData.inbound_sc > 0) { mInboundCallSc.add(tmpSessData.inbound_sc); }
-  //         // else if (tmpSessData.inbound_sc === 0) { mInboundCallSc.add(-1); }
-  //         else { mInboundCallSc.add(tmpSessData.inbound_sc); }
-
-  //         // reset counter if date is different
-  //         if (tmpSessData.date !== moment(cols[0]).format('YYYYMMDDHHmmss')) {
-  //           // mInboundCallSc.add(Number('-' + tmpCounterData.inbound_sc));
-  //           mInboundCallSc.add(0);
-  //           tmpCounterData.inbound_sc = 0;
-  //         }
-
-  //         // set new session
-  //         tmpSessData.seshid = keyVal[1];
-  //         tmpSessData.inbound_sc = 0;
-  //         tmpSessData.date = moment(cols[0]).format('YYYYMMDDHHmmss');
-  //       }
-  //     } else if (keyVal[0].includes('status')) {
-  //       // increment counter success inbound_call
-  //       if (keyVal[1] === 'SUCCESS') { tmpSessData.inbound_sc++; tmpCounterData.inbound_sc++; }
-  //     }
-  //   }
-  // }
 
   for await (const line of file.readLines()) {
     ++lineNumber;
@@ -222,6 +183,8 @@ async function readWholeFileCallngLog(path) {
       const keyVal = col.split('='); // pembagian key value
 
       if (keyVal[0].includes('status')) {
+        // status=NO_USER_RESPONSE
+        // error=400
         /**
          * increment counter success inbound_call
          * 
@@ -245,8 +208,6 @@ async function readWholeFileCallngLog(path) {
           mInboundCallSc.add(1);
         }
       }
-      // status=NO_USER_RESPONSE
-      // error=400
     }
   }
 
@@ -259,6 +220,7 @@ async function readWholeFileCallngLog(path) {
   lineNumber = null;
 }
 
+// Gimana cara tail -f tanpa membaca keseluruhan filenya
 async function readUpdatedFileCallngLog(path) {
   const before = process.memoryUsage().heapUsed / 1024 / 1024;
   const file = await fs.open(path);
