@@ -30,6 +30,7 @@
     "chokidar": "^3.5.3",
     "event-stream": "^4.0.1",
     "express": "^4.18.2",
+    "moment": "^2.29.4",
     "n-readlines": "^1.0.1"
   }
 }
