@@ -33,12 +33,18 @@ function timeoutPromise(cb, timeoutInMs) {
   });
 }
 
+async function forceFlushMetricWithDelay(funcCountMetric, meterProvider, delayInMs) {
+  await timeoutPromise(() => {}, delayInMs);
+  funcCountMetric();
+  meterProvider.forceFlush();
+}
+
 
 /**
  * Config OpenTelemetry
  */
 // For troubleshooting, set the log level to DiagLogLevel.DEBUG
-// opentelemetry.diag.setLogger(new opentelemetry.DiagConsoleLogger(), opentelemetry.DiagLogLevel.DEBUG);
+opentelemetry.diag.setLogger(new opentelemetry.DiagConsoleLogger(), opentelemetry.DiagLogLevel.DEBUG);
 
 // Optionally register instrumentation libraries if using autoInstrumentation
 registerInstrumentations({
@@ -64,13 +70,14 @@ const meterProvider = new MeterProvider({
 /**
  * Set the right exporter and processor
  */
-const exporter = new OTLPMetricExporter({
+const metricOtelExporter = new OTLPMetricExporter({
   url: 'http://localhost:4318/v1/metrics',
 });
+const metricConsoleExporter = new ConsoleMetricExporter();
 
 meterProvider.addMetricReader(new PeriodicExportingMetricReader({
-  exporter: exporter,
-  exportIntervalMillis: 1000,
+  exporter: metricOtelExporter,
+  // exportIntervalMillis: 0,
 }));
 
 
@@ -95,7 +102,7 @@ function fileAdded(path) {
   const filename = split[split.length-1];
   console.log(filename);
 
-  if (filename === 'callng.log.2.small') {
+  if (filename === 'callng.log.2.sampling') {
     readWholeFileCallngLog(path);
   }
 }
@@ -105,7 +112,7 @@ function fileChanged(path) {
 
   const split = path.split(UNIX_PATH);
   const filename = split[split.length-1];
-  if (filename === 'callng.log.2.small') {
+  if (filename === 'callng.log.2.sampling') {
     readUpdatedFileCallngLog(path);
   }
 }
@@ -115,7 +122,7 @@ function fileRemoved(path) {
 
   const split = path.split(UNIX_PATH);
   const filename = split[split.length-1];
-  if (filename === 'callng.log.2.small') {
+  if (filename === 'callng.log.2.sampling') {
     RemovedFileCallngLog(path);
   }
 }
@@ -153,18 +160,22 @@ async function readWholeFileCallngLog(path) {
   // console.log(match);
 
   let lineNumber = 0;
-  // used per different session
-  const tmpSessData = {
-    seshid: '',
-    inbound_sc: 0,
-    date: '',
+  // // used per different session
+  // const tmpSessData = {
+  //   seshid: '',
+  //   inbound_sc: 0,
+  //   date: '',
+  // };
+  // // used per different time
+  // const tmpCounterData = {
+  //   inbound_sc: 0,
+  // };
+  // used per different inbound success
+  const tmpSbcInboundSc = {
+    lastUnixSecond: '', // nilai terkecilnya second bukan milisecond atau dibawahnya
+    cntInboundSc: 0,
   };
-  // used per different time
-  const tmpCounterData = {
-    inbound_sc: 0,
-  }
 
-  // BAK
   // for await (const line of file.readLines()) {
   //   ++lineNumber;
   //   const cols = line.split(' '); // per section
@@ -177,18 +188,17 @@ async function readWholeFileCallngLog(path) {
   //     if (keyVal[0].includes('seshid')) {
   //       // jika session id tidak sama, artinya call baru
   //       if (tmpSessData.seshid !== keyVal[1]) {
-  //         // reset counter if date is different
-  //         console.log(`tmpCounterData.inbound_sc: ${tmpCounterData.inbound_sc}`);
-  //         if (tmpSessData.date !== moment(cols[0]).format('YYYYMMDDHHmmss')) {
-  //           mInboundCallSc.add(Number('-' + tmpCounterData.inbound_sc));
-  //           tmpCounterData.inbound_sc = 0;
-  //         }
-
   //         // push old session data
-  //         console.log(`tmpSessData.inbound_sc: ${tmpSessData.inbound_sc}`);
   //         if (tmpSessData.inbound_sc > 0) { mInboundCallSc.add(tmpSessData.inbound_sc); }
   //         // else if (tmpSessData.inbound_sc === 0) { mInboundCallSc.add(-1); }
   //         else { mInboundCallSc.add(tmpSessData.inbound_sc); }
+
+  //         // reset counter if date is different
+  //         if (tmpSessData.date !== moment(cols[0]).format('YYYYMMDDHHmmss')) {
+  //           // mInboundCallSc.add(Number('-' + tmpCounterData.inbound_sc));
+  //           mInboundCallSc.add(0);
+  //           tmpCounterData.inbound_sc = 0;
+  //         }
 
   //         // set new session
   //         tmpSessData.seshid = keyVal[1];
@@ -196,6 +206,7 @@ async function readWholeFileCallngLog(path) {
   //         tmpSessData.date = moment(cols[0]).format('YYYYMMDDHHmmss');
   //       }
   //     } else if (keyVal[0].includes('status')) {
+  //       // increment counter success inbound_call
   //       if (keyVal[1] === 'SUCCESS') { tmpSessData.inbound_sc++; tmpCounterData.inbound_sc++; }
   //     }
   //   }
@@ -210,32 +221,36 @@ async function readWholeFileCallngLog(path) {
       const col = cols[key].replace(',', ''); // deny character
       const keyVal = col.split('='); // pembagian key value
 
-      if (keyVal[0].includes('seshid')) {
-        // jika session id tidak sama, artinya call baru
-        if (tmpSessData.seshid !== keyVal[1]) {
-          // reset counter if date is different
-          console.log(`tmpCounterData.inbound_sc: ${tmpCounterData.inbound_sc}`);
-          if (tmpSessData.date !== moment(cols[0]).format('YYYYMMDDHHmmss')) {
-            mInboundCallSc.add(Number('-' + tmpCounterData.inbound_sc));
-            tmpCounterData.inbound_sc = 0;
+      if (keyVal[0].includes('status')) {
+        /**
+         * increment counter success inbound_call
+         * 
+         * ketika next stream ada status===SUCCESS
+         *  cek detik, apakah di status==SUCCESS detiknya berbeda dari sebelumnya
+         *  jika berbeda, maka push data yang tercumulative lalu reset data upDownCounter dengan decrement
+         */
+        if (keyVal[1] === 'SUCCESS') {
+          const unixSecond = moment(cols[0]).unix();
+          if (tmpSbcInboundSc.lastUnixSecond !== unixSecond) {
+            console.log('up inbound sc', tmpSbcInboundSc.cntInboundSc);
+            await forceFlushMetricWithDelay(() => {}, meterProvider, 1);
+
+            console.log('down inbound sc');
+            const timeOffSecond = (unixSecond - tmpSbcInboundSc.lastUnixSecond) * 1000;
+            await forceFlushMetricWithDelay(() => {mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));}, meterProvider, timeOffSecond);
+            tmpSbcInboundSc.lastUnixSecond = unixSecond;
+            tmpSbcInboundSc.cntInboundSc = 0;
           }
-
-          // push old session data
-          console.log(`tmpSessData.inbound_sc: ${tmpSessData.inbound_sc}`);
-          if (tmpSessData.inbound_sc > 0) { mInboundCallSc.add(tmpSessData.inbound_sc); }
-          // else if (tmpSessData.inbound_sc === 0) { mInboundCallSc.add(-1); }
-          else { mInboundCallSc.add(tmpSessData.inbound_sc); }
-
-          // set new session
-          tmpSessData.seshid = keyVal[1];
-          tmpSessData.inbound_sc = 0;
-          tmpSessData.date = moment(cols[0]).format('YYYYMMDDHHmmss');
+          tmpSbcInboundSc.cntInboundSc++;
+          mInboundCallSc.add(1);
         }
-      } else if (keyVal[0].includes('status')) {
-        if (keyVal[1] === 'SUCCESS') { tmpSessData.inbound_sc++; tmpCounterData.inbound_sc++; }
       }
+      // status=NO_USER_RESPONSE
+      // error=400
     }
   }
+
+  await forceFlushMetricWithDelay(() => {mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));}, meterProvider, 100);
 
   // performance
   lastLines[path] = lineNumber;
@@ -249,7 +264,7 @@ async function readUpdatedFileCallngLog(path) {
   const file = await fs.open(path);
   // const logs = [];
 
-  const meter = meterProvider.getMeter('callng.log.2.small');
+  const meter = meterProvider.getMeter('callng.log.2.sampling');
   const inboundCallCounter = meter.createCounter('inbound_call', {
     description: 'Counter of Inbound Call',
   });
