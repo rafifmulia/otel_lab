@@ -160,8 +160,8 @@ async function readWholeFileCallngLog(path) {
   // const fields = match?.groups ?? {};
   // console.log(match);
 
-  // await readWholeFileCallngLogWithSyncUpDownCounter(path);
-  await readWholeFileCallngLogWithAsyncUpDownCounter(path);
+  await readWholeFileCallngLogWithSyncUpDownCounter(path);
+  // await readWholeFileCallngLogWithAsyncUpDownCounter(path);
 
   // performance
   const used = (process.memoryUsage().heapUsed / 1024 / 1024) - before;
@@ -239,6 +239,7 @@ async function removedFileCallngLog(path) {
 /**
  * Set periodic metric exporter
  *  Interval: anytime
+ * Case: SBC Inbound Call Success
  */
 async function readWholeFileCallngLogWithSyncUpDownCounter(path) {
   const file = await fs.open(path);
@@ -246,7 +247,7 @@ async function readWholeFileCallngLogWithSyncUpDownCounter(path) {
   const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
   let lineNumber = 0;
 
-  const mInboundCallSc = meter.createUpDownCounter('sbc_inbound_success', {
+  const mInboundCallSc = meter.createUpDownCounter('sbc_inbound_success_syncupdowncounter', {
     description: 'inbound call success',
     unit: 'tps', // time per second
   });
@@ -282,9 +283,11 @@ async function readWholeFileCallngLogWithSyncUpDownCounter(path) {
           const unixSecond = moment(cols[0]).unix();
           if (tmpSbcInboundSc.lastUnixSecond !== unixSecond) {
             console.log('up inbound sc', tmpSbcInboundSc.cntInboundSc);
+            await forceFlushMetricWithDelay(() => {}, meterProvider, 200);
 
             console.log('down inbound sc', Number('-' + tmpSbcInboundSc.cntInboundSc));
             const timeOffSecond = (unixSecond - tmpSbcInboundSc.lastUnixSecond) * 1000; // convert to milisecond
+            console.log('offsetTime', timeOffSecond / 1000);
             await forceFlushMetricWithDelay(() => {mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));}, meterProvider, timeOffSecond);
             // await timeoutPromise(() => {mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));}, timeOffSecond);
             tmpSbcInboundSc.lastUnixSecond = unixSecond;
@@ -297,6 +300,10 @@ async function readWholeFileCallngLogWithSyncUpDownCounter(path) {
     }
   }
 
+  // submit last data
+  await forceFlushMetricWithDelay(() => {}, meterProvider, 200);
+
+  // reset to zero
   // mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));
   await forceFlushMetricWithDelay(() => {mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));}, meterProvider, 100);
 
@@ -306,6 +313,7 @@ async function readWholeFileCallngLogWithSyncUpDownCounter(path) {
 /**
  * Set periodic metric exporter
  *  Interval: 1000
+ * Case: SBC Inbound Call Success
  */
 async function readWholeFileCallngLogWithAsyncUpDownCounter(path) {
   const file = await fs.open(path);
@@ -313,7 +321,7 @@ async function readWholeFileCallngLogWithAsyncUpDownCounter(path) {
   const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
   let lineNumber = 0;
 
-  const mInboundCallSc = meter.createObservableUpDownCounter('sbc_inbound_success', {
+  const mInboundCallSc = meter.createObservableUpDownCounter('sbc_inbound_success_asyncupdowncounter', {
     description: 'inbound call success',
     unit: 'tps', // time per second
   });

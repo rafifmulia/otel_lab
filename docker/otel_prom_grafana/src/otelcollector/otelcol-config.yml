@@ -56,7 +56,16 @@ service:
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [logging, prometheusremotewrite, influxdb]
+      # exporters: [logging, prometheusremotewrite, influxdb]
+      exporters: [logging]
+    metrics/2:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheusremotewrite]
+    metrics/3:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [influxdb]
     logs:
       receivers: [otlp]
       processors: [batch]
