@@ -28,6 +28,10 @@ const UNIX_PATH = '/';
 // FUNCTION HELPER
 function timeoutPromise(cb, timeoutInMs) {
   return new Promise(async (resolve, reject) => {
+    if (timeoutInMs >= 1675695600) {
+      console.error('(node:22082) TimeoutOverflowWarning: 1675695600000 does not fit into a 32-bit signed integer | Auto Set timeoutInMs to 0');
+      timeoutInMs = 0;
+    }
     const timeout = setTimeout(() => {
       resolve(cb());
       clearTimeout(timeout);
@@ -36,6 +40,10 @@ function timeoutPromise(cb, timeoutInMs) {
 }
 
 async function forceFlushMetricWithDelay(funcCountMetric, meterProvider, delayInMs) {
+  if (delayInMs >= 1675695600) {
+    console.error('(node:22082) TimeoutOverflowWarning: 1675695600000 does not fit into a 32-bit signed integer | Auto Set delayInMs to 0');
+    delayInMs = 0;
+  }
   await timeoutPromise(() => {}, delayInMs);
   funcCountMetric();
   meterProvider.forceFlush();
@@ -151,7 +159,7 @@ function initCheckLastLine(path) {
 }
 
 async function readWholeFileCallngLog(path) {
-  const before = process.memoryUsage().heapUsed / 1024 / 1024;
+  // const before = process.memoryUsage().heapUsed / 1024 / 1024;
 
   // const logLineRegex = /(?<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}\+\d{2}:\d{2}) (?<host>\S+) program=(?<program>\S+), pid=(?<pid>\d+), module=(?<module>\S+), space=(?<space>\S+), action=(?<action>\S+), seshid=(?<seshid>\S+), uuid=(?<uuid>\S+), route=(?<route>\S+), sipprofile=(?<sipprofile>\S+), gateway=(?<gateway>\S+), algorithm=(?<algorithm>\S+), forceroute=(?<forceroute>\S+)/;
   // const logs = [];
@@ -160,12 +168,14 @@ async function readWholeFileCallngLog(path) {
   // const fields = match?.groups ?? {};
   // console.log(match);
 
-  await readWholeFileCallngLogWithSyncUpDownCounter(path);
-  // await readWholeFileCallngLogWithAsyncUpDownCounter(path);
+  readWholeFileCallngLogWithSyncCounterMonotonic(path);
+  readWholeFileCallngLogWithAsyncCounterMonotonic(path);
+  readWholeFileCallngLogWithSyncUpDownCounter(path);
+  readWholeFileCallngLogWithAsyncUpDownCounter(path);
 
   // performance
-  const used = (process.memoryUsage().heapUsed / 1024 / 1024) - before;
-  console.log(`The script uses approximately ${Math.round(used * 100) / 100} MB`);
+  // const used = (process.memoryUsage().heapUsed / 1024 / 1024) - before;
+  // console.log(`The script uses approximately ${Math.round(used * 100) / 100} MB`);
 }
 
 // Gimana cara tail -f tanpa membaca keseluruhan filenya
@@ -237,9 +247,123 @@ async function removedFileCallngLog(path) {
 
 
 /**
- * Set periodic metric exporter
- *  Interval: anytime
  * Case: SBC Inbound Call Success
+ * Intrumentation: Synchronous Counter
+ * Selected Aggregation: Sum Aggregation
+ * Aggregation Temporality: Cumulative
+ * Desc: when invoked, if the variable not increased, the result will increase
+ * Ex: when observer(1) then observer(1), again and again. The result will be 0 to 1, 1 to 2, 2 to 3, ...
+ * Config:
+ *  Set periodic metric exporter
+ *    Interval: 1000 ms
+ */
+async function readWholeFileCallngLogWithSyncCounterMonotonic(path) {
+  const file = await fs.open(path);
+  
+  const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
+  let lineNumber = 0;
+
+  const mInboundCallSc = meter.createCounter('sbc_inbound_success_synccounter', {
+    description: 'total inbound call success',
+    unit: 'total',
+  });
+
+  // used per different inbound success
+  const tmpSbcInboundSc = {
+    lastUnixSecond: '', // nilai terkecilnya second bukan milisecond atau dibawahnya
+    cntInboundSc: 0,
+  };
+
+  for await (const line of file.readLines()) {
+    ++lineNumber;
+    const cols = line.split(' '); // per section
+
+    for (const key in cols) {
+      if (cols[key].length < 1) continue; // skip yang kosong
+      const col = cols[key].replace(',', ''); // deny character
+      const keyVal = col.split('='); // pembagian key value
+
+      if (keyVal[0].includes('status')) {
+        if (keyVal[1] === 'SUCCESS') {
+          // const unixSecond = moment(cols[0]).unix();
+          // if (tmpSbcInboundSc.lastUnixSecond !== unixSecond) {}
+          await forceFlushMetricWithDelay(() => {mInboundCallSc.add(1);}, meterProvider, 1000);
+          console.log('lineNumber', lineNumber);
+        }
+      }
+    }
+  }
+
+  lastLines[path] = lineNumber;
+  lineNumber = null;
+  file.close();
+}
+/**
+ * Case: SBC Inbound Call Success
+ * Intrumentation: Asynchronous Counter
+ * Selected Aggregation: Sum Aggregation
+ * Aggregation Temporality: Cumulative
+ * Desc: when invoked, if the variable not increased, the result still same
+ * Ex: when observer(1) then observer(1), again and again. The result will be 0 to 1, 1 to 1, 1 to 1, ...
+ * Config:
+ *  Set periodic metric exporter
+ *    Interval: 1000 ms
+ */
+async function readWholeFileCallngLogWithAsyncCounterMonotonic(path) {
+  const file = await fs.open(path);
+  
+  const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
+  let lineNumber = 0;
+
+  const mInboundCallSc = meter.createObservableCounter('sbc_inbound_success_asynccounter', {
+    description: 'total inbound call success',
+    unit: 'total',
+  });
+
+  // used per different inbound success
+  const tmpSbcInboundSc = {
+    lastUnixSecond: '', // nilai terkecilnya second bukan milisecond atau dibawahnya
+    cntInboundSc: 0,
+  };
+
+  mInboundCallSc.addCallback(function(observableResult) {
+    console.log('observable', tmpSbcInboundSc.cntInboundSc);
+    observableResult.observe(tmpSbcInboundSc.cntInboundSc);
+  });
+
+  for await (const line of file.readLines()) {
+    ++lineNumber;
+    const cols = line.split(' '); // per section
+
+    for (const key in cols) {
+      if (cols[key].length < 1) continue; // skip yang kosong
+      const col = cols[key].replace(',', ''); // deny character
+      const keyVal = col.split('='); // pembagian key value
+
+      if (keyVal[0].includes('status')) {
+        if (keyVal[1] === 'SUCCESS') {
+          // const unixSecond = moment(cols[0]).unix();
+          // if (tmpSbcInboundSc.lastUnixSecond !== unixSecond) {}
+          tmpSbcInboundSc.cntInboundSc++;
+        }
+      }
+    }
+  }
+
+  lastLines[path] = lineNumber;
+  lineNumber = null;
+  file.close();
+}
+/**
+ * Case: SBC Inbound Call Success
+ * Instrumentation: Synchronous UpDownCounter
+ * Selected Aggregation: Sum Aggregation
+ * Aggregation Temporality: Cumulative
+ * Desc: increment and decrement(manually)
+ * Ex: when add(5) then add(7), the result will be 0 to 5, 5 to 12 (*bcs added 7)
+ * Config:
+ *  Set periodic metric exporter
+ *    Interval: 1000 ms
  */
 async function readWholeFileCallngLogWithSyncUpDownCounter(path) {
   const file = await fs.open(path);
@@ -283,7 +407,7 @@ async function readWholeFileCallngLogWithSyncUpDownCounter(path) {
           const unixSecond = moment(cols[0]).unix();
           if (tmpSbcInboundSc.lastUnixSecond !== unixSecond) {
             console.log('up inbound sc', tmpSbcInboundSc.cntInboundSc);
-            await forceFlushMetricWithDelay(() => {}, meterProvider, 200);
+            await forceFlushMetricWithDelay(() => {}, meterProvider, 1000);
 
             console.log('down inbound sc', Number('-' + tmpSbcInboundSc.cntInboundSc));
             const timeOffSecond = (unixSecond - tmpSbcInboundSc.lastUnixSecond) * 1000; // convert to milisecond
@@ -301,7 +425,7 @@ async function readWholeFileCallngLogWithSyncUpDownCounter(path) {
   }
 
   // submit last data
-  await forceFlushMetricWithDelay(() => {}, meterProvider, 200);
+  await forceFlushMetricWithDelay(() => {}, meterProvider, 1000);
 
   // reset to zero
   // mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));
@@ -309,11 +433,18 @@ async function readWholeFileCallngLogWithSyncUpDownCounter(path) {
 
   lastLines[path] = lineNumber;
   lineNumber = null;
+  file.close();
 }
 /**
- * Set periodic metric exporter
- *  Interval: 1000
  * Case: SBC Inbound Call Success
+ * Intrumentation: Asynchronous UpDownCounter
+ * Selected Aggregation: Sum Aggregation
+ * Aggregation Temporality: Delta
+ * Desc: when invoked, the value will reset, i mean start from 0 again
+ * Ex: when observer(5) then observer(7), the result will be 0 to 5, 5 to 0, 0 to 7, 7 to 0
+ * Config:
+ *  Set periodic metric exporter
+ *    Interval: 1000 ms
  */
 async function readWholeFileCallngLogWithAsyncUpDownCounter(path) {
   const file = await fs.open(path);
@@ -377,6 +508,7 @@ async function readWholeFileCallngLogWithAsyncUpDownCounter(path) {
 
   lastLines[path] = lineNumber;
   lineNumber = null;
+  file.close();
 }
 
 

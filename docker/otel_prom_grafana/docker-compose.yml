@@ -41,15 +41,15 @@ services:
     logging: *logging
 
   # Grafana
-  # grafana:
-  #   image: grafana/grafana:9.1.0
-  #   container_name: grafana
-  #   volumes:
-  #     - ./src/grafana/grafana.ini:/etc/grafana/grafana.ini
-  #     # - ./src/grafana/provisioning/:/etc/grafana/provisioning/
-  #   ports:
-  #     - "3000:3000"
-  #   logging: *logging
+  grafana:
+    image: grafana/grafana:9.1.0
+    container_name: grafana
+    volumes:
+      - ./src/grafana/grafana.ini:/etc/grafana/grafana.ini
+      - ./src/grafana/provisioning/:/etc/grafana/provisioning/
+    ports:
+      - "3000:3000"
+    logging: *logging
 
   # Prometheus
   prometheus:
