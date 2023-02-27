@@ -1,8 +1,8 @@
 const fs = require('fs');
 const es = require('event-stream');
 
-const inputFilePath = 'callng.log.2';
-const outputFilePath = 'callng.log.2.inbound_call';
+const inputFilePath = './logs/callng.log.2';
+const outputFilePath = 'callng.log.2.status';
 
 const filteredLines = [];
 
@@ -14,9 +14,9 @@ readStream
   .pipe(es.split())
   .pipe(es.through(function (line) {
     // If the line contains the string "Doe", add it to the filteredLines array
-    if (line.includes('inbound_call')) {
+    if (line.includes('status')) {
           filteredLines.push(line);
-          console.log(line.includes('inbound_call'));
+          console.log(line.includes('status'));
         }
   }, function () {
     // This function is called when the input stream ends
