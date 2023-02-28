@@ -119,7 +119,7 @@ function fileAdded(path) {
   const filename = split[split.length-1];
   console.log(filename);
 
-  if (filename === 'callng.log.2.sampling') {
+  if (filename === 'callng.log.2.small') {
     readWholeFileCallngLog(path);
   }
 }
@@ -129,7 +129,7 @@ function fileChanged(path) {
 
   const split = path.split(UNIX_PATH);
   const filename = split[split.length-1];
-  if (filename === 'callng.log.2.sampling') {
+  if (filename === 'callng.log.2.small') {
     readUpdatedFileCallngLog(path);
   }
 }
@@ -139,7 +139,7 @@ function fileRemoved(path) {
 
   const split = path.split(UNIX_PATH);
   const filename = split[split.length-1];
-  if (filename === 'callng.log.2.sampling') {
+  if (filename === 'callng.log.2.small') {
     removedFileCallngLog(path);
   }
 }
@@ -168,10 +168,10 @@ async function readWholeFileCallngLog(path) {
   // const fields = match?.groups ?? {};
   // console.log(match);
 
-  readWholeFileCallngLogWithSyncCounterMonotonic(path);
-  readWholeFileCallngLogWithAsyncCounterMonotonic(path);
+  // readWholeFileCallngLogWithSyncCounterMonotonic(path);
+  // readWholeFileCallngLogWithAsyncCounterMonotonic(path);
   readWholeFileCallngLogWithSyncUpDownCounter(path);
-  readWholeFileCallngLogWithAsyncUpDownCounter(path);
+  // readWholeFileCallngLogWithAsyncUpDownCounter(path);
 
   // performance
   // const used = (process.memoryUsage().heapUsed / 1024 / 1024) - before;
@@ -184,7 +184,7 @@ async function readUpdatedFileCallngLog(path) {
   const file = await fs.open(path);
   // const logs = [];
 
-  const meter = meterProvider.getMeter('callng.log.2.sampling');
+  const meter = meterProvider.getMeter('callng');
   const inboundCallCounter = meter.createCounter('inbound_call', {
     description: 'Counter of Inbound Call',
   });
@@ -263,7 +263,7 @@ async function readWholeFileCallngLogWithSyncCounterMonotonic(path) {
   const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
   let lineNumber = 0;
 
-  const mInboundCallSc = meter.createCounter('sbc_inbound_success_synccounter', {
+  const mInboundCallSc = meter.createCounter('sbc_inbound_success_total_synccounter', {
     description: 'total inbound call success',
     unit: 'total',
   });
@@ -315,7 +315,7 @@ async function readWholeFileCallngLogWithAsyncCounterMonotonic(path) {
   const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
   let lineNumber = 0;
 
-  const mInboundCallSc = meter.createObservableCounter('sbc_inbound_success_asynccounter', {
+  const mInboundCallSc = meter.createObservableCounter('sbc_inbound_success_total_asynccounter', {
     description: 'total inbound call success',
     unit: 'total',
   });
@@ -371,7 +371,7 @@ async function readWholeFileCallngLogWithSyncUpDownCounter(path) {
   const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
   let lineNumber = 0;
 
-  const mInboundCallSc = meter.createUpDownCounter('sbc_inbound_success_syncupdowncounter', {
+  const mInboundCallSc = meter.createUpDownCounter('sbc_inbound_current_syncupdowncounter', {
     description: 'inbound call success',
     unit: 'tps', // time per second
   });
@@ -385,51 +385,47 @@ async function readWholeFileCallngLogWithSyncUpDownCounter(path) {
   for await (const line of file.readLines()) {
     ++lineNumber;
     const cols = line.split(' '); // per section
+    const unixSecond = moment(cols[0]).unix();
 
     for (const key in cols) {
       if (cols[key].length < 1) continue; // skip yang kosong
       const col = cols[key].replace(',', ''); // deny character
-      const keyVal = col.split('='); // pembagian key value
+      // const keyVal = col.split('='); // pembagian key value
 
-      if (keyVal[0].includes('status')) {
-        // status=NO_USER_RESPONSE
-        // error=400
-        /**
-         * increment counter success inbound_call
-         * 
-         * Logic untuk kalkulasi inbound success dengan UpDownCounter
-         * 
-         * ketika next stream ada status===SUCCESS
-         *  cek detik, apakah di status==SUCCESS detiknya berbeda dari sebelumnya
-         *  jika berbeda, maka push data yang tercumulative lalu reset data upDownCounter dengan decrement
-         */
-        if (keyVal[1] === 'SUCCESS') {
-          const unixSecond = moment(cols[0]).unix();
-          if (tmpSbcInboundSc.lastUnixSecond !== unixSecond) {
-            console.log('up inbound sc', tmpSbcInboundSc.cntInboundSc);
-            await forceFlushMetricWithDelay(() => {}, meterProvider, 1000);
+      /**
+       * increment counter success inbound_call
+       * 
+       * Logic untuk kalkulasi current inbound success dengan UpDownCounter
+       * 
+       * ketika next stream ada status===SUCCESS
+       *  counter UP
+       * ketika next stream ada action=verify_state
+       *  counter DOWN
+       * ketika detik waktu berbeda dengan sebelumnya
+       *  delay 1 detik / forceFlush
+       */
 
-            console.log('down inbound sc', Number('-' + tmpSbcInboundSc.cntInboundSc));
-            const timeOffSecond = (unixSecond - tmpSbcInboundSc.lastUnixSecond) * 1000; // convert to milisecond
-            console.log('offsetTime', timeOffSecond / 1000);
-            await forceFlushMetricWithDelay(() => {mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));}, meterProvider, timeOffSecond);
-            // await timeoutPromise(() => {mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));}, timeOffSecond);
-            tmpSbcInboundSc.lastUnixSecond = unixSecond;
-            tmpSbcInboundSc.cntInboundSc = 0;
-          }
-          tmpSbcInboundSc.cntInboundSc++;
-          mInboundCallSc.add(1);
-        }
+      // status=NO_USER_RESPONSE
+      // error=400
+      if (col.includes('action=inbound_call')) {
+        mInboundCallSc.add(1);
+        tmpSbcInboundSc.cntInboundSc++;
+      } else if (col.includes('action=verify_state')) {
+        mInboundCallSc.add(-1);
+        tmpSbcInboundSc.cntInboundSc--;
       }
+    }
+
+    if (tmpSbcInboundSc.lastUnixSecond !== unixSecond) {
+      console.log('delay');
+      await forceFlushMetricWithDelay(() => {}, meterProvider, 1000);
+      tmpSbcInboundSc.lastUnixSecond = unixSecond;
     }
   }
 
-  // submit last data
-  await forceFlushMetricWithDelay(() => {}, meterProvider, 1000);
-
   // reset to zero
   // mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));
-  await forceFlushMetricWithDelay(() => {mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));}, meterProvider, 100);
+  await forceFlushMetricWithDelay(() => {mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));}, meterProvider, 1000);
 
   lastLines[path] = lineNumber;
   lineNumber = null;
@@ -452,7 +448,7 @@ async function readWholeFileCallngLogWithAsyncUpDownCounter(path) {
   const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
   let lineNumber = 0;
 
-  const mInboundCallSc = meter.createObservableUpDownCounter('sbc_inbound_success_asyncupdowncounter', {
+  const mInboundCallSc = meter.createObservableUpDownCounter('sbc_inbound_success_rate_asyncupdowncounter', {
     description: 'inbound call success',
     unit: 'tps', // time per second
   });
@@ -480,16 +476,15 @@ async function readWholeFileCallngLogWithAsyncUpDownCounter(path) {
       const keyVal = col.split('='); // pembagian key value
 
       if (keyVal[0].includes('status')) {
-        // status=NO_USER_RESPONSE
-        // error=400
         /**
          * increment counter success inbound_call
          * 
-         * Logic untuk kalkulasi inbound success dengan UpDownCounter
+         * Logic untuk kalkulasi rate per second inbound success dengan AsyncUpDownCounter
          * 
          * ketika next stream ada status===SUCCESS
          *  cek detik, apakah di status==SUCCESS detiknya berbeda dari sebelumnya
-         *  jika berbeda, maka push data yang tercumulative lalu reset data upDownCounter dengan decrement
+         *  jika berbeda, maka reset data counting menjadi 0
+         *  metode push dilakukan per detik, jika di detik itu ada data maka terinsert, jika tidak maka 0
          */
         if (keyVal[1] === 'SUCCESS') {
           const unixSecond = moment(cols[0]).unix();
