@@ -7,7 +7,6 @@ const fs = require('node:fs/promises');
 // const nReadlines = require('n-readlines');
 // const events = require('events');
 const chokidar = require('chokidar');
-// chokidar issue: https://stackoverflow.com/questions/70615579/stop-nodejs-from-garbage-collection-automatic-closing-of-file-descriptors
 const moment = require('moment');
 
 // const opentelemetry = require("@opentelemetry/sdk-node");
@@ -249,7 +248,7 @@ async function removedFileCallngLog(path) {
 
 
 /**
- * Case: SBC Inbound Call Success
+ * Case: Total SBC Inbound Call Success
  * Intrumentation: Synchronous Counter
  * Selected Aggregation: Sum Aggregation
  * Aggregation Temporality: Cumulative
@@ -301,7 +300,7 @@ async function readWholeFileCallngLogWithSyncCounterMonotonic(path) {
   file.close();
 }
 /**
- * Case: SBC Inbound Call Success
+ * Case: Highest Total SBC Inbound Call Success per Second
  * Intrumentation: Asynchronous Counter
  * Selected Aggregation: Sum Aggregation
  * Aggregation Temporality: Cumulative
@@ -357,7 +356,7 @@ async function readWholeFileCallngLogWithAsyncCounterMonotonic(path) {
   file.close();
 }
 /**
- * Case: SBC Inbound Call Success
+ * Case: Active SBC Inbound Call
  * Instrumentation: Synchronous UpDownCounter
  * Selected Aggregation: Sum Aggregation
  * Aggregation Temporality: Cumulative
@@ -420,21 +419,24 @@ async function readWholeFileCallngLogWithSyncUpDownCounter(path) {
 
     if (tmpSbcInboundSc.lastUnixSecond !== unixSecond) {
       console.log('delay');
-      await forceFlushMetricWithDelay(() => {}, meterProvider, 1000);
+      const timeOffSecond = (unixSecond - tmpSbcInboundSc.lastUnixSecond) * 1000; // convert to milisecond
+      await timeoutPromise(() => {}, timeOffSecond);
+      // await forceFlushMetricWithDelay(() => {}, meterProvider, 1000);
       tmpSbcInboundSc.lastUnixSecond = unixSecond;
     }
   }
 
   // reset to zero
   // mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));
-  await forceFlushMetricWithDelay(() => {mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));}, meterProvider, 1000);
+  await timeoutPromise(() => {mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));}, 1000);
+  // await forceFlushMetricWithDelay(() => {mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));}, meterProvider, 1000);
 
   lastLines[path] = lineNumber;
   lineNumber = null;
   file.close();
 }
 /**
- * Case: SBC Inbound Call Success
+ * Case: Highest SBC Inbound Call
  * Intrumentation: Asynchronous UpDownCounter
  * Selected Aggregation: Sum Aggregation
  * Aggregation Temporality: Delta
