@@ -47,6 +47,8 @@ services:
     volumes:
       - ./src/grafana/grafana.ini:/etc/grafana/grafana.ini
       - ./src/grafana/provisioning/:/etc/grafana/provisioning/
+      - ./src/grafana/logs/grafana/:/var/log/grafana/
+      - ./src/grafana/data/grafana/:/var/lib/grafana/
     ports:
       - "3000:3000"
     logging: *logging
