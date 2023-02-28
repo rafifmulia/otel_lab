@@ -398,7 +398,7 @@ async function readWholeFileCallngLogWithHistogramCounter(path) {
     name: 'Success_type_histogram_Status',
     description: 'Histogram of request Status',
     unit:'miliseconds',
-    boundaries: [0.01, 0.1, 1, 10], //set the time offset for the histogram
+    // boundaries: [0.01, 0.1, 1, 10], //set the time offset for the histogram
   });
 
   // used per different inbound success
@@ -412,9 +412,9 @@ async function readWholeFileCallngLogWithHistogramCounter(path) {
       const col = cols[key].replace(',', ''); // deny character
       // const keyVal = col.split('='); // pembagian key value
       
-      if (col.includes('status=NO_USER_RESPONSE')) {
+      if (col.includes('status=NO_USER_RESPONSE') || col.includes('status=ORIGINATOR_CANCEL')) {
         await timeoutPromise(() => {
-          console.log('ADD: Status_no_user.add(1);');
+          console.log('ADD: Status_.add(1);');
           histogramStatusFail.record(Number(1))
         }, 1000);
       } else if (col.includes('status=SUCCESS')) {
