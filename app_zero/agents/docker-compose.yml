@@ -1,0 +1,119 @@
+version: '3.9'
+x-default-logging: &logging
+  driver: "json-file"
+  options:
+    max-size: "5m"
+    max-file: "2"
+
+networks:
+  default:
+    name: app_zero
+    external: true
+    # driver: bridge
+
+services:
+  otelcol:
+    image: otel/opentelemetry-collector-contrib:0.72.0
+    container_name: app_zero-otelcol
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+          cpus: '0.3'
+    restart: unless-stopped
+    environment:
+      - OTEL_EXPORTER_INFLUXDB_ENDPOINT=http://influxdb:8086
+    command: [ "--config=/etc/otelcol-config.yaml", "--config=/etc/otelcol-config-extras.yaml" ]
+    volumes:
+      - ./otelcol/otelcol-config.yaml:/etc/otelcol-config.yaml
+      - ./otelcol/otelcol-config-extras.yaml:/etc/otelcol-config-extras.yaml
+    ports:
+      - "4317:4317"           # OTLP over gRPC receiver
+      - "4318:4318"           # OTLP over HTTP receiver
+      - "8888:8888"           # metrics endpoint
+      # - "9464:9464"
+      # - "55680:55680"
+      # - "55681:55681"
+    depends_on:
+      - prometheus
+      - influxdb
+    logging: *logging
+
+  grafana:
+    image: grafana/grafana-enterprise:9.3.6
+    container_name: app_zero-grafana
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+          cpus: '0.2'
+    user: '472'
+    environment:
+      - GF_SECURITY_ADMIN_USER=sts
+      - GF_SECURITY_ADMIN_PASSWORD=stsgrafana
+    volumes:
+      - ./grafana/conf/grafana.ini:/etc/grafana/grafana.ini
+      - ./grafana/provisioning/:/etc/grafana/provisioning/
+      - ./grafana/logs/:/var/log/grafana/
+      - ./grafana/data/:/var/lib/grafana/
+    ports:
+      - "3000:3000"
+    logging: *logging
+
+  prometheus:
+    image: prom/prometheus:v2.37.6
+    container_name: app_zero-prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+          cpus: '0.2'
+    command:
+      - --web.console.templates=/etc/prometheus/consoles
+      - --web.console.libraries=/etc/prometheus/console_libraries
+      - --storage.tsdb.retention.time=24h
+      - --config.file=/etc/prometheus/prometheus-config.yaml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+      - --web.route-prefix=/
+      - --enable-feature=exemplar-storage
+      - --enable-feature=remote-write-receiver
+    volumes:
+      - ./prometheus/prometheus-config.yaml:/etc/prometheus/prometheus-config.yaml
+    ports:
+      - "9090:9090"
+    logging: *logging
+  
+  influxdb:
+    image: influxdb:2.6.1
+    container_name: app_zero-influxdb
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+          cpus: '0.2'
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=sts
+      - DOCKER_INFLUXDB_INIT_PASSWORD=stsinflux
+      - DOCKER_INFLUXDB_INIT_ORG=shibly
+      - DOCKER_INFLUXDB_INIT_BUCKET=demo
+      - DOCKER_INFLUXDB_INIT_RETENTION=24h
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=M0UrSZJtyOTi04FinpOw4lv6wrvzg5dTZ88VM9Zkbh2XpmFOYYrof9NxdoR_jY2afRiwJNJ92V-TlGVugUzWQA==
+      - DOCKER_INFLUXDB_INIT_USER_ID=0ad1b38748914000
+      - DOCKER_INFLUXDB_INIT_ORG_ID=3a81605f65b7ab5e
+      - DOCKER_INFLUXDB_INIT_BUCKET_ID=e489b9199dba4dca
+      - INFLUXDB_HTTP_AUTH_ENABLED=true
+      - INFLUXDB_HTTP_FLUX_ENABLED=true
+      - DOCKER_INFLUXDB_CONFIG_PATH=/root/influxdb2/config.toml
+      - DOCKER_INFLUXDB_BOLT_PATH=/root/influxdb2/influxdb.bolt
+      - DOCKER_INFLUXDB_ENGINE_PATH=/root/influxdb2/engine
+      - INFLUXDB_REPORTING_DISABLED=true
+      # - INFLUXDB_META_DIR=/path/to/metadir
+      - INFLUXDB_DATA_QUERY_LOG_ENABLED=true
+    volumes:
+      - ./influxdb/conf2/:/etc/influxdb2/
+      - ./influxdb/data2/:/var/lib/influxdb2/
+      # - ./influxdb/data/:/var/lib/influxdb/ # if migrating from v1 to v2
+    ports:
+      - "8086:8086"

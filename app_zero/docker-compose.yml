@@ -1,0 +1,40 @@
+version: "3.9"
+
+networks:
+  outside:
+    name: grafana-network
+    external: true
+
+x-default-logging: &logging
+  driver: "json-file"
+  options:
+    max-size: "5m"
+    max-file: "2"
+
+services:
+  app:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    image: nodejs-log
+    container_name: nodejs-log
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 180M
+        reservations:
+          cpus: "0.25"
+          memory: 100M
+    working_dir: /usr/src/app
+    volumes:
+      - ./logToTrace.js:/usr/src/app/logToTrace.js
+      - ./logToMetrics.js:/usr/src/app/logToMetrics.js
+      - ./logs/:/usr/src/app/logs/
+    command:
+      - npm
+      - run
+      - dev
+    networks:
+      - outside
+    logging: *logging
