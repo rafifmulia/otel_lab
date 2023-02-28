@@ -1,8 +1,8 @@
 const fs = require('fs');
 const es = require('event-stream');
 
-const inputFilePath = './logs/callng.log.2';
-const outputFilePath = 'callng.log.2.status';
+const inputFilePath = './logs/callng.log.2.big';
+const outputFilePath = './logs/callng.log.2.status';
 
 const filteredLines = [];
 
