@@ -173,6 +173,7 @@ async function readWholeFileCallngLog(path) {
   readWholeFileCallngLogWithAsyncCounterMonotonic(path);
   readWholeFileCallngLogWithSyncUpDownCounter(path);
   readWholeFileCallngLogWithAsyncUpDownCounter(path);
+  // readWholeFileCallngLogSuccessRateperSecond(path);
 
   // performance
   // const used = (process.memoryUsage().heapUsed / 1024 / 1024) - before;
@@ -248,7 +249,7 @@ async function removedFileCallngLog(path) {
 
 
 /**
- * Case: Total SBC Inbound Call Success
+ * Case: Total SBC All Inbound Call
  * Intrumentation: Synchronous Counter
  * Selected Aggregation: Sum Aggregation
  * Aggregation Temporality: Cumulative
@@ -264,7 +265,7 @@ async function readWholeFileCallngLogWithSyncCounterMonotonic(path) {
   const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
   let lineNumber = 0;
 
-  const mInboundCallSc = meter.createCounter('sbc_inbound_success_total_synccounter', {
+  const mInboundCallSc = meter.createCounter('sbc_inbound_all_total_synccounter', {
     description: 'total inbound call success',
     unit: 'total',
   });
@@ -284,8 +285,8 @@ async function readWholeFileCallngLogWithSyncCounterMonotonic(path) {
       const col = cols[key].replace(',', ''); // deny character
       const keyVal = col.split('='); // pembagian key value
 
-      if (keyVal[0].includes('status')) {
-        if (keyVal[1] === 'SUCCESS') {
+      if (keyVal[0].includes('action')) {
+        if (keyVal[1] === 'inbound_call') {
           // const unixSecond = moment(cols[0]).unix();
           // if (tmpSbcInboundSc.lastUnixSecond !== unixSecond) {}
           await forceFlushMetricWithDelay(() => {mInboundCallSc.add(1);}, meterProvider, 1000);
@@ -300,7 +301,7 @@ async function readWholeFileCallngLogWithSyncCounterMonotonic(path) {
   file.close();
 }
 /**
- * Case: Highest Total SBC Inbound Call Success per Second
+ * Case: Total SBC Inbound Call Success
  * Intrumentation: Asynchronous Counter
  * Selected Aggregation: Sum Aggregation
  * Aggregation Temporality: Cumulative
@@ -439,7 +440,7 @@ async function readWholeFileCallngLogWithSyncUpDownCounter(path) {
  * Case: Highest SBC Inbound Call
  * Intrumentation: Asynchronous UpDownCounter
  * Selected Aggregation: Sum Aggregation
- * Aggregation Temporality: Delta
+ * Aggregation Temporality: Cumulative
  * Desc: when invoked, the value will reset, i mean start from 0 again
  * Ex: when observer(5) then observer(7), the result will be 0 to 5, 5 to 0, 0 to 7, 7 to 0
  * Config:
@@ -447,6 +448,81 @@ async function readWholeFileCallngLogWithSyncUpDownCounter(path) {
  *    Interval: 1000 ms
  */
 async function readWholeFileCallngLogWithAsyncUpDownCounter(path) {
+  const file = await fs.open(path);
+  
+  const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
+  let lineNumber = 0;
+
+  const mInboundCallSc = meter.createObservableUpDownCounter('sbc_inbound_success_rate_asyncupdowncounter', {
+    description: 'inbound call success',
+    unit: 'tps', // time per second
+  });
+
+  // used per different inbound success
+  const tmpSbcInboundSc = {
+    lastUnixSecond: '', // nilai terkecilnya second bukan milisecond atau dibawahnya
+    cntInboundSc: 0,
+    tmpCntInboundSc: 0,
+  };
+
+  mInboundCallSc.addCallback(function(observableResult) {
+    console.log('observer', tmpSbcInboundSc.cntInboundSc);
+    observableResult.observe(tmpSbcInboundSc.cntInboundSc);
+    tmpSbcInboundSc.cntInboundSc = 0;
+  });
+
+  for await (const line of file.readLines()) {
+    ++lineNumber;
+    const cols = line.split(' '); // per section
+
+    for (const key in cols) {
+      if (cols[key].length < 1) continue; // skip yang kosong
+      const col = cols[key].replace(',', ''); // deny character
+      const keyVal = col.split('='); // pembagian key value
+
+      if (keyVal[0].includes('status')) {
+        /**
+         * increment counter success inbound_call
+         * 
+         * Logic untuk kalkulasi rate per second inbound success dengan AsyncUpDownCounter
+         * 
+         * ketika next stream ada status===SUCCESS
+         *  cek detik, apakah di status==SUCCESS detiknya berbeda dari sebelumnya
+         *  jika berbeda, maka reset data counting menjadi 0
+         *  metode push dilakukan per detik, jika di detik itu ada data maka terinsert, jika tidak maka 0
+         */
+        if (keyVal[1] === 'SUCCESS') {
+          const unixSecond = moment(cols[0]).unix();
+          if (tmpSbcInboundSc.lastUnixSecond !== unixSecond) {
+            const timeOffSecond = (unixSecond - tmpSbcInboundSc.lastUnixSecond) * 1000; // convert to milisecond
+            await timeoutPromise(() => {tmpSbcInboundSc.cntInboundSc = tmpSbcInboundSc.tmpCntInboundSc;}, timeOffSecond);
+            console.log('after delay', tmpSbcInboundSc.cntInboundSc);
+            tmpSbcInboundSc.lastUnixSecond = unixSecond;
+            tmpSbcInboundSc.tmpCntInboundSc = 0;
+          }
+          tmpSbcInboundSc.tmpCntInboundSc++;
+        }
+      }
+    }
+  }
+
+  lastLines[path] = lineNumber;
+  lineNumber = null;
+  file.close();
+}
+/**
+ * IN-DEVELOPMENT
+ * Case: Success SBC Inbound Call
+ * Intrumentation: Asynchronous UpDownCounter
+ * Selected Aggregation: Sum Aggregation
+ * Aggregation Temporality: Delta
+ * Desc: when invoked, the value will reset, i mean start from 0 again
+ * Ex: when observer(5) then observer(7), the result will be 0 to 5, 5 to 0, 0 to 7, 7 to 0
+ * Config:
+ *  Set periodic metric exporter
+ *    Interval: 1000 ms
+ */
+async function readWholeFileCallngLogSuccessRateperSecond(path) {
   const file = await fs.open(path);
   
   const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
