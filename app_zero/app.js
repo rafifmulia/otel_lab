@@ -169,12 +169,12 @@ async function readWholeFileCallngLog(path) {
   // const fields = match?.groups ?? {};
   // console.log(match);
 
-  const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
-  readWholeFileCallngLogWithSyncCounterMonotonic(path, meter);
-  readWholeFileCallngLogWithAsyncCounterMonotonic(path, meter);
-  readWholeFileCallngLogWithSyncUpDownCounter(path, meter);
-  readWholeFileCallngLogWithAsyncUpDownCounter(path, meter);
-  readWholeFileCallngLogSuccessRate(path, meter);
+  readWholeFileCallngLogWithSyncCounterMonotonic(path);
+  readWholeFileCallngLogWithAsyncCounterMonotonic(path);
+  readWholeFileCallngLogWithSyncUpDownCounter(path);
+  readWholeFileCallngLogWithAsyncUpDownCounter(path);
+  readWholeFileCallngLogWithHistogramCounter(path);
+  // readWholeFileCallngLogSuccessRateperSecond(path);
 
   // performance
   // const used = (process.memoryUsage().heapUsed / 1024 / 1024) - before;
@@ -578,6 +578,75 @@ async function readWholeFileCallngLogSuccessRate(path, meter) {
   lastLines[path] = lineNumber;
   lineNumber = null;
   file.close();
+}
+
+/**
+ * IN-DEVELOPMENT
+ * Case: Status Succes and Fail ( No user Response and Originator_Cancel)
+ * Intrumentation: synchronous Histogram
+ * Selected Aggregation: Sum Aggregation
+ * Aggregation Temporality: - 
+ * Adding Number plus 1 whenever it find the selected condition, grouping status
+ *  Set periodic metric exporter
+ * Adding boundaris to determine the time the histogram emited [0.01, 0.1, 1, 10]
+ *    Interval: 1000 ms
+ */
+
+async function readWholeFileCallngLogWithHistogramCounter(path) {
+  const file = await fs.open(path);
+  
+  const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
+  let lineNumber = 0;
+
+  // const mInboundCallSc = meter.createUpDownCounter('sbc_inbound_success', {
+  //   description: 'inbound call success',
+  //   unit: 'tps', // time per second
+  // });
+
+  const histogramStatusFail = meter.createHistogram('histogram_status_fail_counter',{
+    name: 'Fail_type_histogram_Status',
+    description: 'Histogram of request Status',
+    unit:'miliseconds',
+    boundaries: [0.01, 0.1, 1, 10], //set the time offset for the histogram
+  });
+
+  const histogramStatusSc = meter.createHistogram('histogram_status_success_counter',{
+    name: 'Success_type_histogram_Status',
+    description: 'Histogram of request Status',
+    unit:'miliseconds',
+    // boundaries: [0.01, 0.1, 1, 10], //set the time offset for the histogram
+  });
+
+  // used per different inbound success
+
+  for await (const line of file.readLines()) {
+    ++lineNumber;
+    const cols = line.split(' '); // per section
+
+    for (const key in cols) {
+      if (cols[key].length < 1) continue; // skip yang kosong
+      const col = cols[key].replace(',', ''); // deny character
+      // const keyVal = col.split('='); // pembagian key value
+      
+      if (col.includes('status=NO_USER_RESPONSE') || col.includes('status=ORIGINATOR_CANCEL')) {
+        await timeoutPromise(() => {
+          console.log('ADD: Status_.add(1);');
+          histogramStatusFail.record(Number(1))
+        }, 1000);
+      } else if (col.includes('status=SUCCESS')) {
+        await timeoutPromise(() => {
+          console.log('ADD: successCounter.add(1);');
+          histogramStatusSc.record(Number(1));
+        }, 1000);
+      }
+    }
+  }
+
+  // mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));
+  // await forceFlushMetricWithDelay(() => {mInboundCallSc.add(Number('-' + tmpSbcInboundSc.cntInboundSc));}, meterProvider, 100);
+
+  lastLines[path] = lineNumber;
+  lineNumber = null;
 }
 
 
