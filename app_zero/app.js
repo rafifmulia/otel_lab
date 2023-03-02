@@ -169,11 +169,12 @@ async function readWholeFileCallngLog(path) {
   // const fields = match?.groups ?? {};
   // console.log(match);
 
-  readWholeFileCallngLogWithSyncCounterMonotonic(path);
-  readWholeFileCallngLogWithAsyncCounterMonotonic(path);
-  readWholeFileCallngLogWithSyncUpDownCounter(path);
-  readWholeFileCallngLogWithAsyncUpDownCounter(path);
-  // readWholeFileCallngLogSuccessRateperSecond(path);
+  const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
+  readWholeFileCallngLogWithSyncCounterMonotonic(path, meter);
+  readWholeFileCallngLogWithAsyncCounterMonotonic(path, meter);
+  readWholeFileCallngLogWithSyncUpDownCounter(path, meter);
+  readWholeFileCallngLogWithAsyncUpDownCounter(path, meter);
+  readWholeFileCallngLogSuccessRate(path, meter);
 
   // performance
   // const used = (process.memoryUsage().heapUsed / 1024 / 1024) - before;
@@ -259,10 +260,10 @@ async function removedFileCallngLog(path) {
  *  Set periodic metric exporter
  *    Interval: 1000 ms
  */
-async function readWholeFileCallngLogWithSyncCounterMonotonic(path) {
+async function readWholeFileCallngLogWithSyncCounterMonotonic(path, meter) {
   const file = await fs.open(path);
   
-  const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
+  // const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
   let lineNumber = 0;
 
   const mInboundCallSc = meter.createCounter('sbc_inbound_all_total_synccounter', {
@@ -289,7 +290,8 @@ async function readWholeFileCallngLogWithSyncCounterMonotonic(path) {
         if (keyVal[1] === 'inbound_call') {
           // const unixSecond = moment(cols[0]).unix();
           // if (tmpSbcInboundSc.lastUnixSecond !== unixSecond) {}
-          await forceFlushMetricWithDelay(() => {mInboundCallSc.add(1);}, meterProvider, 1000);
+          await timeoutPromise(() => {mInboundCallSc.add(1);}, 1000);
+          // await forceFlushMetricWithDelay(() => {mInboundCallSc.add(1);}, meterProvider, 1000);
           console.log('lineNumber', lineNumber);
         }
       }
@@ -311,10 +313,10 @@ async function readWholeFileCallngLogWithSyncCounterMonotonic(path) {
  *  Set periodic metric exporter
  *    Interval: 1000 ms
  */
-async function readWholeFileCallngLogWithAsyncCounterMonotonic(path) {
+async function readWholeFileCallngLogWithAsyncCounterMonotonic(path, meter) {
   const file = await fs.open(path);
   
-  const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
+  // const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
   let lineNumber = 0;
 
   const mInboundCallSc = meter.createObservableCounter('sbc_inbound_success_total_asynccounter', {
@@ -367,10 +369,10 @@ async function readWholeFileCallngLogWithAsyncCounterMonotonic(path) {
  *  Set periodic metric exporter
  *    Interval: 1000 ms
  */
-async function readWholeFileCallngLogWithSyncUpDownCounter(path) {
+async function readWholeFileCallngLogWithSyncUpDownCounter(path, meter) {
   const file = await fs.open(path);
   
-  const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
+  // const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
   let lineNumber = 0;
 
   const mInboundCallSc = meter.createUpDownCounter('sbc_inbound_active_syncupdowncounter', {
@@ -447,13 +449,13 @@ async function readWholeFileCallngLogWithSyncUpDownCounter(path) {
  *  Set periodic metric exporter
  *    Interval: 1000 ms
  */
-async function readWholeFileCallngLogWithAsyncUpDownCounter(path) {
+async function readWholeFileCallngLogWithAsyncUpDownCounter(path, meter) {
   const file = await fs.open(path);
   
-  const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
+  // const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
   let lineNumber = 0;
 
-  const mInboundCallSc = meter.createObservableUpDownCounter('sbc_inbound_success_rate_asyncupdowncounter', {
+  const mInboundCallSc = meter.createObservableUpDownCounter('sbc_highest_inbound_success_asyncupdowncounter', {
     description: 'inbound call success',
     unit: 'tps', // time per second
   });
@@ -512,7 +514,7 @@ async function readWholeFileCallngLogWithAsyncUpDownCounter(path) {
 }
 /**
  * IN-DEVELOPMENT
- * Case: Success SBC Inbound Call
+ * Case: Success Rate SBC Inbound Call per Second
  * Intrumentation: Asynchronous UpDownCounter
  * Selected Aggregation: Sum Aggregation
  * Aggregation Temporality: Delta
@@ -522,10 +524,10 @@ async function readWholeFileCallngLogWithAsyncUpDownCounter(path) {
  *  Set periodic metric exporter
  *    Interval: 1000 ms
  */
-async function readWholeFileCallngLogSuccessRateperSecond(path) {
+async function readWholeFileCallngLogSuccessRate(path, meter) {
   const file = await fs.open(path);
   
-  const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
+  // const meter = meterProvider.getMeter('callng', '0.1.0', {schemaUrl: '1.1.0'});
   let lineNumber = 0;
 
   const mInboundCallSc = meter.createObservableUpDownCounter('sbc_inbound_success_rate_asyncupdowncounter', {
@@ -536,49 +538,41 @@ async function readWholeFileCallngLogSuccessRateperSecond(path) {
   // used per different inbound success
   const tmpSbcInboundSc = {
     lastUnixSecond: '', // nilai terkecilnya second bukan milisecond atau dibawahnya
+    cntInboundAll: 0,
     cntInboundSc: 0,
-    tmpCntInboundSc: 0,
   };
 
   mInboundCallSc.addCallback(function(observableResult) {
-    console.log('observer', tmpSbcInboundSc.cntInboundSc);
-    observableResult.observe(tmpSbcInboundSc.cntInboundSc);
+    const scRatePerSecond = tmpSbcInboundSc.cntInboundSc/tmpSbcInboundSc.cntInboundAll;
+    console.log('cntInboundAll', tmpSbcInboundSc.cntInboundAll, 'cntInboundSc', tmpSbcInboundSc.cntInboundSc, 'successRate', scRatePerSecond);
     tmpSbcInboundSc.cntInboundSc = 0;
+    tmpSbcInboundSc.cntInboundAll = 0;
+    observableResult.observe(scRatePerSecond);
   });
 
   for await (const line of file.readLines()) {
     ++lineNumber;
     const cols = line.split(' '); // per section
+    const unixSecond = moment(cols[0]).unix();
 
     for (const key in cols) {
       if (cols[key].length < 1) continue; // skip yang kosong
       const col = cols[key].replace(',', ''); // deny character
-      const keyVal = col.split('='); // pembagian key value
-
-      if (keyVal[0].includes('status')) {
-        /**
-         * increment counter success inbound_call
-         * 
-         * Logic untuk kalkulasi rate per second inbound success dengan AsyncUpDownCounter
-         * 
-         * ketika next stream ada status===SUCCESS
-         *  cek detik, apakah di status==SUCCESS detiknya berbeda dari sebelumnya
-         *  jika berbeda, maka reset data counting menjadi 0
-         *  metode push dilakukan per detik, jika di detik itu ada data maka terinsert, jika tidak maka 0
-         */
-        if (keyVal[1] === 'SUCCESS') {
-          const unixSecond = moment(cols[0]).unix();
-          if (tmpSbcInboundSc.lastUnixSecond !== unixSecond) {
-            const timeOffSecond = (unixSecond - tmpSbcInboundSc.lastUnixSecond) * 1000; // convert to milisecond
-            await timeoutPromise(() => {tmpSbcInboundSc.cntInboundSc = tmpSbcInboundSc.tmpCntInboundSc;}, timeOffSecond);
-            console.log('after delay', tmpSbcInboundSc.cntInboundSc);
-            tmpSbcInboundSc.lastUnixSecond = unixSecond;
-            tmpSbcInboundSc.tmpCntInboundSc = 0;
-          }
-          tmpSbcInboundSc.tmpCntInboundSc++;
-        }
+      // const keyVal = col.split('='); // pembagian key value
+      if (col.includes('action=inbound_call')) {
+        tmpSbcInboundSc.cntInboundAll++;
+      } else if (col.includes('status=SUCCESS')) {
+        tmpSbcInboundSc.cntInboundSc++;
       }
     }
+
+    // if (tmpSbcInboundSc.lastUnixSecond !== unixSecond) {
+    //   const timeOffSecond = (unixSecond - tmpSbcInboundSc.lastUnixSecond) * 1000; // convert to milisecond
+    //   console.log('delay', timeOffSecond / 1000);
+    //   await timeoutPromise(() => {}, timeOffSecond);
+    //   // await forceFlushMetricWithDelay(() => {}, meterProvider, 1000);
+    //   tmpSbcInboundSc.lastUnixSecond = unixSecond;
+    // }
   }
 
   lastLines[path] = lineNumber;

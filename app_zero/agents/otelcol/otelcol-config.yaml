@@ -18,7 +18,6 @@ exporters:
     endpoint: 0.0.0.0:9090
     resource_to_telemetry_conversion:
       enabled: true
-
   influxdb:
     endpoint: http://influxdb:8086/api/v2/write
     timeout: 1s
@@ -26,17 +25,19 @@ exporters:
     bucket: demo
     token: "M0UrSZJtyOTi04FinpOw4lv6wrvzg5dTZ88VM9Zkbh2XpmFOYYrof9NxdoR_jY2afRiwJNJ92V-TlGVugUzWQA=="
     metrics_schema: telegraf-prometheus-v1
-
     sending_queue:
       enabled: true
       num_consumers: 3
       queue_size: 10
-
     retry_on_failure:
       enabled: true
       initial_interval: 1s
       max_interval: 3s
       max_elapsed_time: 10s
+  jaeger:
+    endpoint: "jaeger:14250"
+    tls:
+      insecure: true
 
 processors:
   batch:
