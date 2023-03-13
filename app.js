@@ -1,16 +1,24 @@
 const express = require("express");
 const axios = require("axios");
 
-const PORT = parseInt(process.env.PORT || "8080");
+const PORT = parseInt(process.env.PORT || "5000");
 const app = express();
-const logger = require("./logger");
+// const logger = require("./logger");
 
 app.use(express.json());
 
 app.get("/", (req, res) => {
-  logger.log("debug", "Hello World");
-  logger.debug("The is the home '/' route.");
+  // logger.log("debug", "Hello World");
+  // logger.debug("The is the home '/' route.");
   res.send("Hello World");
+});
+
+app.get("/status", (req, res) => {
+  const response = {
+    code: 200,
+    message: "Health Check",
+  };
+  res.status(response.code).json(JSON.stringify(response));
 });
 
 app.get("/for", (req, res) => {
@@ -48,8 +56,8 @@ app.get("/hit_other_service", (req, res) => {
     axios.request(options).then(function (response) {
       res.status(200).end(JSON.stringify(response.data));
     }).catch(function (error) {
-      logger.error("401 unauthenticated"); //error method
-      logger.debug("The is the 401 hit request for the url https://andruxnet-random-famous-quotes.p.rapidapi.com/.");
+      // logger.error("401 unauthenticated"); //error method
+      // logger.debug("The is the 401 hit request for the url https://andruxnet-random-famous-quotes.p.rapidapi.com/.");
       res.status(200).json(JSON.stringify(error.response.data));
     });
   } catch (e) {

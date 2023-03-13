@@ -15,6 +15,7 @@ RUN npm i -g nodemon && npm install
 # Bundle app source
 COPY ./logToTrace.js /usr/src/app/logToTrace.js
 COPY ./logToMetrics.js /usr/src/app/logToMetrics.js
+COPY ./app.js /usr/src/app/app.js
 COPY ./logs/ /usr/src/app/logs/
 
 # ENTRYPOINT [ "/bin/sh", "-c" ]
